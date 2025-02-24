@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id              String            @id @default(cuid())
+  code            String            @unique
+  name            String
+  parentId        String?
+  parent          Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children        Category[]        @relation("CategoryHierarchy")
+  transactions    Transaction[]
+  budgets         Json?        
+  isLeaf          Boolean           @default(true)
+  color           String?           
+  accountMappings AccountMapping[]
+  categoryBudgets CategoryBudget[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model TransactionInquiry {
+  id            String      @id @default(cuid())
+  transactionId String      
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  note          String
+  status        String      @default("pending")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model Transaction {
+  id                String      @id
+  projectCode      String      
+  year             Int
+  amount           Float       
+  internalCode     String      
+  description      String      
+  costGroup        String      
+  transactionType  String      
+  documentNumber   String?     
+  bookingDate      DateTime    
+  personReference  String?     
+  details          String?     
+  invoiceDate      DateTime?   
+  invoiceNumber    String?     
+  paymentPartner   String?     
+  internalAccount  String?     
+  accountLabel     String?     
+  requiresSpecialHandling Boolean @default(false)
+  processed        Boolean     @default(false)  
+  status           String      @default("unprocessed")
+  
+  // New split-related fields
+  isSplit         Boolean     @default(false)
+  totalSplits     Int         @default(0)
+  splitIndex      Int         @default(0)
+  originalAmount  Float?
+
+  categoryId       String      
+  category         Category    @relation(fields: [categoryId], references: [id])
+  inquiries        TransactionInquiry[]
+  
+  @@index([year])
+  @@index([internalCode])
+  @@index([categoryId])
+  @@index([bookingDate])
+  @@index([processed])
+  @@index([documentNumber])
+}
+
+model AccountMapping {
+  id            String    @id @default(cuid())
+  internalCode  String    
+  description   String    
+  categoryId    String    
+  category      Category  @relation(fields: [categoryId], references: [id])
+  active        Boolean   @default(true)  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([internalCode])
+  @@index([categoryId])
+}
+
+model CategoryBudget {
+  id          String    @id @default(cuid())
+  categoryId  String
+  year        Int
+  amount      Float     
+  spent       Float     @default(0)  
+  remaining   Float     @default(0)  
+  category    Category  @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@unique([categoryId, year])
+  @@index([year])
+}

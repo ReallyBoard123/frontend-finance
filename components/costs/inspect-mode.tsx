@@ -1,0 +1,74 @@
+import React, { useState } from 'react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
+import type { Transaction } from '@/types/transactions';
+import { TransactionDetails } from './tabbed-transaction';
+
+interface InspectModeProps {
+  children: React.ReactNode;
+  transactions: Transaction[];
+}
+
+export function InspectMode({ children, transactions }: InspectModeProps) {
+  const [isInspectMode, setIsInspectMode] = useState(false);
+  const [selectedAmount, setSelectedAmount] = useState<{
+    amount: number;
+    year: number;
+    categoryCode: string;
+  } | null>(null);
+
+  const handleCellClick = (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => {
+    if (!isInspectMode) return;
+    e.preventDefault();
+    setSelectedAmount({ amount, year, categoryCode });
+  };
+
+  const matchingTransactions = selectedAmount ? 
+    transactions.filter(t => t.year === selectedAmount.year && t.categoryCode === selectedAmount.categoryCode) : 
+    [];
+
+  const childrenWithProps = React.Children.map(children, child => {
+    if (React.isValidElement<{ onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void; isInspectMode?: boolean }>(child)) {
+      return React.cloneElement(child, {
+        onCellClick: handleCellClick,
+        isInspectMode,
+      });
+    }
+    return child;
+  });
+
+  return (
+    <div>
+      <div className="flex items-center space-x-2 mb-4">
+        <Checkbox 
+          id="inspect-mode" 
+          checked={isInspectMode} 
+          onCheckedChange={(checked) => setIsInspectMode(checked as boolean)}
+        />
+        <label htmlFor="inspect-mode">Inspect Mode</label>
+      </div>
+
+      <div className={isInspectMode ? 'cursor-pointer' : ''}>
+        {childrenWithProps}
+      </div>
+      
+      <Dialog open={!!selectedAmount} onOpenChange={() => setSelectedAmount(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Transaction Details for {selectedAmount?.categoryCode} ({selectedAmount?.year})
+            </DialogTitle>
+          </DialogHeader>
+          {selectedAmount && matchingTransactions.length > 0 && (
+            <TransactionDetails 
+              transactions={matchingTransactions}
+              categoryCode={selectedAmount.categoryCode}
+              year={selectedAmount.year}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
