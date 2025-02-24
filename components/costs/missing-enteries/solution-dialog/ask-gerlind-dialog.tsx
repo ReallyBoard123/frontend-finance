@@ -1,10 +1,10 @@
-// components/budget/ask-gerlind-dialog.tsx
 import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useFinanceStore } from '@/lib/store';
 import type { Transaction } from '@/types/transactions';
+import { formatDate } from '@/lib/utils';
 
 interface AskGerlindDialogProps {
   transaction: Transaction | null;
@@ -31,7 +31,6 @@ export function AskGerlindDialog({ transaction, open, onOpenChange }: AskGerlind
 
       if (!response.ok) throw new Error('Failed to save inquiry');
 
-      // Update transaction status
       updateTransaction(transaction.id, {
         status: 'pending_inquiry',
         previousState: { status: transaction.status }
@@ -55,7 +54,7 @@ export function AskGerlindDialog({ transaction, open, onOpenChange }: AskGerlind
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="font-semibold">Date:</div>
-              <div>{transaction.bookingDate.toLocaleDateString('de-DE')}</div>
+              <div>{formatDate(transaction.bookingDate)}</div>
               
               <div className="font-semibold">Amount:</div>
               <div>{new Intl.NumberFormat('de-DE', { 

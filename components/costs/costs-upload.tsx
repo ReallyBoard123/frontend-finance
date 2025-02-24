@@ -24,7 +24,6 @@ export function CostsUpload() {
   const { categories, setCosts, setInquiries } = useFinanceStore();
 
   useEffect(() => {
-    // Fetch existing transactions when component mounts
     const fetchTransactions = async () => {
       try {
         const [regularRes, specialRes, inquiriesRes] = await Promise.all([
@@ -38,28 +37,31 @@ export function CostsUpload() {
           specialRes.json(),
           inquiriesRes.json()
         ]);
-
+  
         setInquiries(inquiries);
 
-        if (regular.length || special.length) {
-          const data = {
-            transactions: regular,
-            specialTransactions: special,
-            yearlyTotals: calculateYearlyTotals(regular, categories)
-          };
-          setProcessedData(data);
-          setCosts(data);
-          setIsVerified(true);
-          setUploadStatus('Loaded existing transactions from database');
-        }
-      } catch (error) {
-        console.error('Error fetching transactions:', error);
-        setUploadStatus('Error loading saved transactions');
-      }
-    };
+      const regularTransactions = regular.transactions || [];
+      const specialTransactions = special.transactions || [];
 
-    fetchTransactions();
-  }, [categories, setCosts, setInquiries]);
+      if (regularTransactions.length || specialTransactions.length) {
+        const data = {
+          transactions: regularTransactions,
+          specialTransactions: specialTransactions,
+          yearlyTotals: calculateYearlyTotals(regularTransactions, categories)
+        };
+        setProcessedData(data);
+        setCosts(data);
+        setIsVerified(true);
+        setUploadStatus('Loaded existing transactions from database');
+      }
+    } catch (error) {
+      console.error('Error fetching transactions:', error);
+      setUploadStatus('Error loading saved transactions');
+    }
+  };
+
+  fetchTransactions();
+}, [categories, setCosts, setInquiries]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -187,20 +189,20 @@ export function CostsUpload() {
                 </InspectMode>
               </TabsContent>
 
-                <TabsContent value="details">
+              <TabsContent value="details">
                 <TransactionList 
-                  initialTransactions={processedData.transactions}
+                  initialTransactions={processedData?.transactions || []}
                   categories={categories}
                 />
-                </TabsContent>
+              </TabsContent>
 
-                <TabsContent value="special">
+              <TabsContent value="special">
                 <TransactionList 
-                  initialTransactions={processedData.specialTransactions}
+                  initialTransactions={processedData?.specialTransactions || []}
                   categories={categories}
                   isSpecial={true}
                 />
-                </TabsContent>
+              </TabsContent>
 
               <TabsContent value="missing">
                 <MissingEntriesList

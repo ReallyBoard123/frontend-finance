@@ -1,7 +1,7 @@
-// components/database/database-saver.tsx
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Save } from 'lucide-react';
+import { useFinanceStore } from '@/lib/store';
 import type { ProcessedData, Transaction } from '@/types/transactions';
 
 interface DatabaseSaverProps {
@@ -46,7 +46,7 @@ function validateTransaction(transaction: Transaction): { isValid: boolean; miss
 }
 
 function prepareTransactionData(transaction: Transaction) {
-  const prepared = {
+  return {
     ...transaction,
     id: generateTransactionId(transaction),
     internalCode: transaction.internalCode.toString().padStart(4, '0'),
@@ -69,12 +69,43 @@ function prepareTransactionData(transaction: Transaction) {
     categoryCode: transaction.categoryCode || null,
     categoryName: transaction.categoryName || null
   };
-
-  return prepared;
 }
 
 export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: DatabaseSaverProps) {
   const [saving, setSaving] = useState(false);
+  const { setCosts, categories } = useFinanceStore();
+
+  const calculateYearlyTotals = (transactions: Transaction[]) => {
+    const yearlyTotals: Record<string, Record<string, any>> = {};
+    const years = [...new Set(transactions.map(t => t.year.toString()))];
+    
+    years.forEach(year => {
+      yearlyTotals[year] = {};
+      categories.forEach(category => {
+        yearlyTotals[year][category.code] = {
+          spent: 0,
+          budget: category.budgets?.[year] || 0,
+          remaining: category.budgets?.[year] || 0,
+          transactions: []
+        };
+      });
+    });
+
+    transactions.forEach(transaction => {
+      const year = transaction.year.toString();
+      const categoryCode = transaction.categoryCode;
+      if (!categoryCode) return;
+      
+      if (yearlyTotals[year][categoryCode]) {
+        yearlyTotals[year][categoryCode].spent += transaction.amount;
+        yearlyTotals[year][categoryCode].remaining = 
+          yearlyTotals[year][categoryCode].budget - yearlyTotals[year][categoryCode].spent;
+        yearlyTotals[year][categoryCode].transactions.push(transaction);
+      }
+    });
+
+    return yearlyTotals;
+  };
 
   const handleSave = async () => {
     if (!processedData || !isVerified || saving) return;
@@ -124,9 +155,29 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
           errorCount++;
         }
 
+        // Add small delay to prevent overwhelming the server
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
+      // Fetch updated data after save
+      const [regularRes, specialRes] = await Promise.all([
+        fetch('/api/transactions?type=regular'),
+        fetch('/api/transactions?type=special')
+      ]);
+
+      const [regularData, specialData] = await Promise.all([
+        regularRes.json(),
+        specialRes.json()
+      ]);
+
+      // Update store with fresh data
+      const newData = {
+        transactions: regularData.transactions || [],
+        specialTransactions: specialData.transactions || [],
+        yearlyTotals: calculateYearlyTotals(regularData.transactions || [])
+      };
+
+      setCosts(newData);
       onSaveComplete(`Processed: ${successCount} saved, ${skippedCount} skipped, ${errorCount} failed`);
     } catch (error) {
       onSaveComplete(`Save process failed: ${error instanceof Error ? error.message : 'Unknown error'}`);

@@ -1,4 +1,3 @@
-// components/budget/missing-entries.tsx
 import React, { useState, useMemo } from 'react';
 import { Card } from "@/components/ui/card";
 import { MissingChoices } from './missing-choices';
@@ -16,28 +15,59 @@ interface MissingEntriesListProps {
 export function MissingEntriesList({ transactions, categories, onTransactionUpdate }: MissingEntriesListProps) {
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const { costs } = useFinanceStore();
 
   const isProperlyMapped = (transaction: Transaction): boolean => {
-    if (!transaction.categoryCode) return false;
+    // Include ELVI transactions
+    if (transaction.internalCode === '600' || transaction.internalCode === '0600' || transaction.transactionType?.includes('ELVI')) {
+      return false;
+    }
+
+    // Skip if no category code assigned
+    if (!transaction.categoryCode) return true;
     
+    // Skip if category not found
     const category = categories.find(c => c.code === transaction.categoryCode);
-    if (!category) return false;
+    if (!category) return true;
 
+    // Include if category exists but not part of summary yet
     const isParent = categories.some(c => c.parentId === category.id);
-    if (!isParent) return true;
+    if (isParent) {
+      const childCategories = categories.filter(c => c.parentId === category.id);
+      return childCategories.some(child => child.code === transaction.categoryCode);
+    }
 
-    const childCategories = categories.filter(c => c.parentId === category.id);
-    return childCategories.some(child => child.code === transaction.categoryCode);
+    return true;
   };
 
   const missingEntries = useMemo(() => {
-    return transactions.filter(transaction => !isProperlyMapped(transaction));
-  }, [transactions, categories]);
+    if (!costs) return [];
+    
+    const allTransactions = [
+      ...transactions,
+      ...(costs.specialTransactions || [])
+    ];
+    
+    return allTransactions.filter(transaction => !isProperlyMapped(transaction));
+  }, [transactions, costs, categories]);
 
   const handleActionSelect = (transaction: Transaction, action: string) => {
     setSelectedTransaction(transaction);
     if (action === 'ask') {
       setDialogOpen(true);
+    }
+  };
+
+  const formatDate = (dateString: string | Date) => {
+    if (!dateString) return '';
+    try {
+      if (typeof dateString === 'string') {
+        return new Date(dateString).toLocaleDateString('de-DE');
+      }
+      return dateString.toLocaleDateString('de-DE');
+    } catch (error) {
+      console.error('Error formatting date:', dateString);
+      return String(dateString);
     }
   };
 
@@ -63,7 +93,7 @@ export function MissingEntriesList({ transactions, categories, onTransactionUpda
           {missingEntries.map((transaction) => (
             <tr key={transaction.id} className="border-b hover:bg-gray-50">
               <td className="p-2">
-                {transaction.bookingDate.toLocaleDateString('de-DE')}
+                {formatDate(transaction.bookingDate)}
               </td>
               <td className="p-2">
                 {new Intl.NumberFormat('de-DE', { 
@@ -71,7 +101,9 @@ export function MissingEntriesList({ transactions, categories, onTransactionUpda
                   currency: 'EUR' 
                 }).format(transaction.amount)}
               </td>
-              <td className="p-2">{transaction.categoryCode}</td>
+              <td className="p-2">
+                {transaction.internalCode === '0600' ? 'ELVI' : transaction.categoryCode}
+              </td>
               <td className="p-2">{transaction.documentNumber}</td>
               <td className="p-2">
                 {transaction.status || 'unprocessed'}
