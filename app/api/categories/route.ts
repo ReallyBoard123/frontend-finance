@@ -9,7 +9,9 @@ const categorySchema = z.object({
   name: z.string().min(1, "Name is required"),
   parentId: z.string().nullable(),
   budgets: z.record(z.string(), z.number().min(0, "Budget must be positive")),
-  color: z.string().optional()
+  color: z.string().optional(),
+  isSpecialCategory: z.boolean().optional(),
+  categoryType: z.string().optional()
 })
 
 type CategoryInput = z.infer<typeof categorySchema>
@@ -49,7 +51,9 @@ export async function POST(req: Request) {
         parentId: validatedData.parentId === 'none' ? null : validatedData.parentId,
         budgets: validatedData.budgets,
         color: validatedData.color,
-        isLeaf: true // New categories are leaf nodes by default
+        isLeaf: true, // New categories are leaf nodes by default
+        isSpecialCategory: validatedData.isSpecialCategory || false,
+        categoryType: validatedData.categoryType
       },
       include: {
         children: true,
@@ -95,7 +99,9 @@ export async function PATCH(
         name: validatedData.name,
         parentId: validatedData.parentId === 'none' ? null : validatedData.parentId,
         budgets: validatedData.budgets,
-        color: validatedData.color
+        color: validatedData.color,
+        isSpecialCategory: validatedData.isSpecialCategory,
+        categoryType: validatedData.categoryType
       },
       include: {
         children: true,

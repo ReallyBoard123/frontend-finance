@@ -1,3 +1,4 @@
+// types/transactions.ts
 export interface Transaction {
   id: string;
   projectCode: string;
@@ -16,7 +17,7 @@ export interface Transaction {
   paymentPartner?: string;
   internalAccount?: string;
   accountLabel?: string;
-  categoryId?: string;
+  categoryId?: string | null; // Made optional
   categoryCode?: string;
   categoryName?: string;
   requiresSpecialHandling: boolean;
@@ -30,6 +31,7 @@ export interface Transaction {
     note?: string;
     categoryCode?: string;
   } | null;
+  metadata?: Record<string, any>
 }
 
 export interface TransactionUpdate {
@@ -37,10 +39,14 @@ export interface TransactionUpdate {
   status?: 'pending' | 'completed' | 'unprocessed' | 'pending_inquiry';
   note?: string;
   categoryCode?: string;
+  categoryId?: string | null; // Made optional
+  categoryName?: string;
   previousState?: {
     status?: string;
     note?: string;
     categoryCode?: string;
+    categoryId?: string;
+    categoryName?: string;
   } | null;
 }
 
@@ -75,7 +81,7 @@ export interface TransactionInquiry {
   transactionId: string;
   transaction: Transaction;
   note: string;
-  status: 'pending' | 'resolved';
-  createdAt: Date;
-  updatedAt: Date;
+  status: 'pending' | 'resolved' | 'rejected';
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }

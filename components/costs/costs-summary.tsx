@@ -7,6 +7,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CostCell } from './cost-cell';
 import type { Category } from '@/types/budget';
 import type { YearlyTotals } from '@/types/transactions';
+import { useFinanceStore } from '@/lib/store';
+import { RefreshCw, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface CostsSummaryProps {
   categories: Category[];
@@ -23,6 +26,8 @@ export function CostsSummary({
 }: CostsSummaryProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { fetchTransactions } = useFinanceStore();
   const [sortConfig, setSortConfig] = useState<{
     key: 'code' | 'name',
     direction: 'asc' | 'desc'
@@ -46,15 +51,31 @@ export function CostsSummary({
   const calculateTotalBudget = (categoryId: string, year: string): number => {
     const category = categories.find(c => c.id === categoryId);
     if (!category) return 0;
-
+    
+    // Skip special categories in budget calculations
+    if (category.isSpecialCategory) return 0;
+  
     const childCategories = categories.filter(c => c.parentId === categoryId);
     if (childCategories.length === 0) {
       return category.budgets[year] || 0;
     }
-
+  
     return childCategories.reduce((sum, child) => 
       sum + calculateTotalBudget(child.id, year), 0
     );
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchTransactions();
+      toast.success('Data refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toast.error('Failed to refresh data');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const calculateTotalSpent = (categoryId: string, year: string): number => {
@@ -170,6 +191,9 @@ export function CostsSummary({
     return years.reduce((acc, year) => {
       const rootCategories = getFilteredCategories(null);
       const yearTotals = rootCategories.reduce((totals, category) => {
+        // Skip special categories in budget totals
+        if (category.isSpecialCategory) return totals;
+        
         const budget = calculateTotalBudget(category.id, year);
         const spent = calculateTotalSpent(category.id, year);
         return {
@@ -187,32 +211,53 @@ export function CostsSummary({
   return (
     <Card className="p-4">
       <div className="space-y-4">
-        <div className="flex gap-4 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-            <Input
-              placeholder="Filter categories..."
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="pl-8"
-            />
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
+              <Input
+                placeholder="Filter categories..."
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => handleSort('code')}
+              className="gap-2"
+            >
+              Sort by Code
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => handleSort('name')}
+              className="gap-2"
+            >
+              Sort by Name
+            </Button>
           </div>
-          <Button 
-            variant="outline" 
-            onClick={() => handleSort('code')}
-            className="gap-2"
+  
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
           >
-            Sort by Code
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => handleSort('name')}
-            className="gap-2"
-          >
-            Sort by Name
+            {isRefreshing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Data
+              </>
+            )}
           </Button>
         </div>
-
+  
         {!hasFilteredResults && filter && (
           <Alert>
             <AlertDescription>
@@ -220,7 +265,7 @@ export function CostsSummary({
             </AlertDescription>
           </Alert>
         )}
-
+  
         {isInspectMode && (
           <Alert>
             <AlertDescription>
@@ -228,7 +273,7 @@ export function CostsSummary({
             </AlertDescription>
           </Alert>
         )}
-
+  
         <div className="overflow-x-auto">
           <table className="min-w-full">
             <thead className="bg-gray-50">
@@ -281,5 +326,5 @@ export function CostsSummary({
         </div>
       </div>
     </Card>
-  );
+  )
 }

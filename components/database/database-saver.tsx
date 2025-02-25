@@ -46,6 +46,15 @@ function validateTransaction(transaction: Transaction): { isValid: boolean; miss
 }
 
 function prepareTransactionData(transaction: Transaction) {
+  // For special numeric codes (600, 23152), preserve them without forcing a category
+  const isSpecialCode = /^0*(600|23152)$/.test(transaction.internalCode);
+  
+  // Keep categoryId null for special codes to preserve their nature
+  const categoryId = isSpecialCode ? null : transaction.categoryId;
+  
+  // For special codes, use the raw code as the display code
+  const categoryCode = isSpecialCode ? transaction.internalCode : transaction.categoryCode;
+  
   return {
     ...transaction,
     id: generateTransactionId(transaction),
@@ -65,9 +74,13 @@ function prepareTransactionData(transaction: Transaction) {
     paymentPartner: transaction.paymentPartner || null,
     internalAccount: transaction.internalAccount || null,
     accountLabel: transaction.accountLabel || null,
-    categoryId: transaction.categoryId || null,
-    categoryCode: transaction.categoryCode || null,
-    categoryName: transaction.categoryName || null
+    categoryId: categoryId,
+    // Store additional metadata for future reference
+    metadata: {
+      needsReview: isSpecialCode, // Flag special codes for review in Missing Entries
+      originalInternalCode: transaction.internalCode,
+      categoryCode: categoryCode
+    }
   };
 }
 
@@ -101,6 +114,16 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
         yearlyTotals[year][categoryCode].remaining = 
           yearlyTotals[year][categoryCode].budget - yearlyTotals[year][categoryCode].spent;
         yearlyTotals[year][categoryCode].transactions.push(transaction);
+      }
+
+      const category = categories.find(c => c.code === categoryCode);
+      if (!category) return;
+
+      const parentCategory = categories.find(c => c.id === category.parentId);
+      if (parentCategory && yearlyTotals[year][parentCategory.code]) {
+        yearlyTotals[year][parentCategory.code].spent += transaction.amount;
+        yearlyTotals[year][parentCategory.code].remaining = 
+          yearlyTotals[year][parentCategory.code].budget - yearlyTotals[year][parentCategory.code].spent;
       }
     });
 

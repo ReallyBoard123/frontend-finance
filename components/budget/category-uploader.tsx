@@ -15,11 +15,13 @@ interface ProcessedCategory {
   parent_code: string | null;
   budgets: Record<string, number>;
   isLeaf: boolean;
+  isSpecialCategory?: boolean;
   validation?: {
     hasDiscrepancy: boolean;
     expectedTotal: Record<string, number>;
     calculatedTotal: Record<string, number>;
   };
+  
 }
 
 export function CategoryUploader() {
@@ -46,15 +48,15 @@ export function CategoryUploader() {
 
     // Validate each parent's totals
     const validatedCategories = categories.map(category => {
-      if (category.isLeaf) return category;
-
+      if (category.isLeaf || category.isSpecialCategory) return category;
+  
       const children = parentToChildren.get(category.code) || [];
       const calculatedTotals: Record<string, number> = {};
       
       years.forEach(year => {
-        calculatedTotals[year] = children.reduce((sum, child) => 
-          sum + (child.budgets[year] || 0), 0
-        );
+        calculatedTotals[year] = children
+          .filter(child => !child.isSpecialCategory) // Skip special categories
+          .reduce((sum, child) => sum + (child.budgets[year] || 0), 0);
       });
 
       const hasDiscrepancy = years.some(year => 

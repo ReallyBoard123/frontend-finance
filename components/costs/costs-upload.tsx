@@ -16,6 +16,7 @@ import { Category } from '@/types/budget';
 import { MissingEntriesList } from './missing-enteries/missing-entries';
 import { InquiryList } from '../budget/inquiry-list';
 import { DbExport } from '../database/db-export';
+import { SpecialCategorySummary } from '../budget/special-categories-summary';
 
 export function CostsUpload() {
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
@@ -179,15 +180,22 @@ export function CostsUpload() {
                 <TabsTrigger value="missing">Missing Entries</TabsTrigger>
                 <TabsTrigger value="inquiries">Ask Gerlind</TabsTrigger>
               </TabsList>
-              
-              <TabsContent value="summary">
-                <InspectMode transactions={processedData.transactions}>
-                  <CostsSummary 
-                    categories={categories}
-                    yearlyTotals={processedData.yearlyTotals}
-                  />
-                </InspectMode>
-              </TabsContent>
+
+<TabsContent value="summary">
+  <InspectMode transactions={processedData.transactions}>
+    <CostsSummary 
+      categories={categories}
+      yearlyTotals={processedData.yearlyTotals}
+    />
+    <div className="mt-6">
+      <SpecialCategorySummary
+        transactions={[...processedData.transactions, ...processedData.specialTransactions]}
+        categories={categories}
+        years={["2023", "2024", "2025"]}
+      />
+    </div>
+  </InspectMode>
+</TabsContent>
 
               <TabsContent value="details">
                 <TransactionList 
@@ -229,12 +237,14 @@ function calculateYearlyTotals(transactions: Transaction[], categories: Category
   
   years.forEach(year => {
     yearlyTotals[year] = {};
+    // Include ALL categories in the yearly totals for tracking
     categories.forEach(category => {
       yearlyTotals[year][category.code] = {
         spent: 0,
         budget: category.budgets?.[year] || 0,
         remaining: category.budgets?.[year] || 0,
-        transactions: []
+        transactions: [],
+        isSpecialCategory: category.isSpecialCategory || false
       };
     });
   });
@@ -269,11 +279,23 @@ function processTransactions(rows: any[], categories: Category[]): ProcessedData
   const transactions = rows
     .filter((row: any) => row['Jahr'] && row['Betrag'])
     .map((row: any) => {
-      const internalCode = row['Konto (KoArt)'].toString();
+      const internalCode = row['Konto (KoArt)']?.toString() || '';
       const transactionType = row['Buchungsart (Art)'];
+      
+      // Debug logging to check what's causing the special transaction classification
+      console.log('Processing transaction:', {
+        id: `${row['Projekt (KTR)']}-${row['Jahr']}-${row['BelegNr (BelegNr)']}`,
+        transactionType,
+        internalCode,
+        description: row['Bezeichnung (Konto_Bez)']
+      });
+      
+      // More explicit special handling check
       const requiresSpecialHandling = 
-        transactionType === 'IVMC-Hochr.' || 
-        internalCode === '23152';
+        (transactionType === 'IVMC-Hochr.') || 
+        (internalCode === '23152');
+      
+      console.log(`Transaction requires special handling: ${requiresSpecialHandling}`);
 
       const internalCodeNum = internalCode.padStart(4, '0');
       const categoryCode = `F${internalCodeNum}`;
@@ -285,22 +307,22 @@ function processTransactions(rows: any[], categories: Category[]): ProcessedData
 
       const transaction: Transaction = {
         id: `${row['Projekt (KTR)']}-${row['Jahr']}-${row['BelegNr (BelegNr)']}`,
-        projectCode: row['Projekt (KTR)'].toString(),
+        projectCode: row['Projekt (KTR)']?.toString() || '',
         year: parseInt(row['Jahr']),
         amount: parseFloat(row['Betrag']),
         internalCode,
-        description: row['Bezeichnung (Konto_Bez)'],
-        costGroup: row['Kontengruppe (KoArt_GR)'],
-        transactionType,
-        documentNumber: row['BelegNr (BelegNr)']?.toString(),
+        description: row['Bezeichnung (Konto_Bez)'] || '',
+        costGroup: row['Kontengruppe (KoArt_GR)'] || '',
+        transactionType: transactionType || '',
+        documentNumber: row['BelegNr (BelegNr)']?.toString() || '',
         bookingDate: new Date(row['BuchDat (Buch_Dat)'] || row['Erstellungsdatum']),
-        personReference: row['Grund1 (Grund1)'],
-        details: row['Grund2 (Grund2)'],
+        personReference: row['Grund1 (Grund1)'] || '',
+        details: row['Grund2 (Grund2)'] || '',
         invoiceDate: row['RechDat (Rech_dat)'] ? new Date(row['RechDat (Rech_dat)']) : null,
-        invoiceNumber: row['RechNr (Rech_Nr)'],
-        paymentPartner: row['Zahlungspartner (Zahlungsp)'],
-        internalAccount: row['koa (koa)']?.toString(),
-        accountLabel: row['koa-Bezeichnung (koa_Bez)'],
+        invoiceNumber: row['RechNr (Rech_Nr)'] || '',
+        paymentPartner: row['Zahlungspartner (Zahlungsp)'] || '',
+        internalAccount: row['koa (koa)']?.toString() || '',
+        accountLabel: row['koa-Bezeichnung (koa_Bez)'] || '',
         categoryId: matchingCategory?.id || '',
         categoryCode: matchingCategory?.code,
         categoryName: matchingCategory?.name,
@@ -313,8 +335,17 @@ function processTransactions(rows: any[], categories: Category[]): ProcessedData
       return transaction;
     });
 
-  const specialTransactions = transactions.filter(t => t.requiresSpecialHandling);
+  // Filter special transactions with clear logging
+  const specialTransactions = transactions.filter(t => {
+    console.log(`Checking special handling for ${t.id}: ${t.requiresSpecialHandling}`);
+    return t.requiresSpecialHandling;
+  });
   const regularTransactions = transactions.filter(t => !t.requiresSpecialHandling);
+  
+  console.log(`Total transactions: ${transactions.length}`);
+  console.log(`Regular transactions: ${regularTransactions.length}`);
+  console.log(`Special transactions: ${specialTransactions.length}`);
+  
   const yearlyTotals = calculateYearlyTotals(regularTransactions, categories);
 
   return { 

@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { EditCategoryForm } from './edit-category-form'
 import { Checkbox } from "@/components/ui/checkbox"
-import type { Category, CategoryFormData } from '@/types/budget'
+import { Category, CategoryFormData } from '@/types/budget'
+
 
 interface EnhancedCategoryTreeProps {
   categories: Category[]
@@ -35,18 +36,21 @@ export function EnhancedCategoryTree({
   })
 
   const calculateTotalBudget = (categoryId: string, year: string): number => {
-    const category = categories.find(c => c.id === categoryId)
-    if (!category) return 0
-
-    const childCategories = categories.filter(c => c.parentId === categoryId)
+    const category = categories.find(c => c.id === categoryId);
+    if (!category) return 0;
+    
+    // Skip special categories in budget calculations
+    if (category.isSpecialCategory) return 0;
+  
+    const childCategories = categories.filter(c => c.parentId === categoryId);
     if (childCategories.length === 0) {
-      return category.budgets[year] || 0
+      return category.budgets[year] || 0;
     }
-
+  
     return childCategories.reduce((sum, child) => 
       sum + calculateTotalBudget(child.id, year), 0
-    )
-  }
+    );
+  };
 
   const getChildCategories = (parentId: string | null): Category[] => {
     let filtered = categories.filter(category => category.parentId === parentId)

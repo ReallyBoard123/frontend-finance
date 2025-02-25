@@ -34,6 +34,7 @@ interface StoreActions {
   setCosts: (costs: ProcessedData) => void;
   setInquiries: (inquiries: TransactionInquiry[]) => void;
   updateTransaction: (id: string, updates: TransactionUpdate) => void;
+  updateTransactionCategory: (transactionId: string, categoryId: string, categoryCode: string, categoryName: string) => Promise<boolean>;
   
   // Loading state setters
   setLoading: (key: keyof StoreState['isLoading'], value: boolean) => void;
@@ -99,6 +100,111 @@ export const useFinanceStore = create<FinanceStore>()(
             }
           };
         }),
+        
+        updateTransactionCategory: async (
+          transactionId: string, 
+          categoryId: string | null, 
+          categoryCode: string | null,
+          categoryName: string | null
+        ) => {
+          const store = get();
+          
+          try {
+            store.setLoading('transactions', true);
+            
+            // Find the transaction in current state
+            const transaction = store.costs?.transactions.find(t => t.id === transactionId);
+            if (!transaction) {
+              throw new Error('Transaction not found in store');
+            }
+            
+            // Handle special numeric codes
+            const isSpecialCode = categoryCode && /^0*(600|23152)$/.test(categoryCode);
+            
+            // Store the previous state for history
+            const previousState = {
+              categoryId: transaction.categoryId,
+              categoryCode: transaction.categoryCode,
+              categoryName: transaction.categoryName
+            };
+            
+            // For special codes, set categoryId to null but preserve the code
+            const updatedCategoryId = isSpecialCode ? null : categoryId;
+            
+            // Update transaction in database
+            const response = await fetch(`/api/transactions/${transactionId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                categoryId: updatedCategoryId,
+                categoryCode: categoryCode || undefined,
+                categoryName,
+                status: 'completed',
+                previousState
+              })
+            });
+            
+            if (!response.ok) {
+              throw new Error('Failed to update transaction');
+            }
+            
+            // Create transaction log
+            await fetch('/api/transaction-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                transactionId,
+                action: 'category_assigned',
+                previousState,
+                currentState: {
+                  categoryId: updatedCategoryId,
+                  categoryCode,
+                  categoryName
+                },
+                note: `Category changed from ${previousState.categoryCode || 'unassigned'} to ${categoryCode}`,
+                performedBy: 'user'
+              })
+            });
+            
+            // Update transaction in local state
+            const updatedTransactions = store.costs?.transactions.map(t => 
+              t.id === transactionId ? {
+                ...t,
+                categoryId: updatedCategoryId || undefined,
+                categoryCode: categoryCode || undefined,
+                categoryName: categoryName || undefined,
+                status: 'completed' as 'completed'
+              } : t
+            ) || [] as Transaction[];
+            
+            // Recalculate totals with the updated transactions
+            const yearlyTotals = calculateYearlyTotals(updatedTransactions, store.categories);
+            
+            // Update the store with new data
+            set({
+              costs: {
+                ...store.costs as ProcessedData,
+                transactions: updatedTransactions,
+                yearlyTotals
+              }
+            });
+            
+            store.setError('transactions', undefined);
+            
+            // Force refetch to ensure everything is in sync
+            setTimeout(() => {
+              store.fetchTransactions();
+            }, 500);
+            
+            return true;
+          } catch (error) {
+            console.error('Error updating transaction category:', error);
+            store.setError('transactions', error instanceof Error ? error.message : 'Unknown error');
+            throw error;
+          } finally {
+            store.setLoading('transactions', false);
+          }
+        },
 
       // Loading state setters
       setLoading: (key, value) =>
@@ -232,6 +338,7 @@ function calculateYearlyTotals(transactions: Transaction[], categories: Category
   
   years.forEach(year => {
     yearlyTotals[year] = {};
+    // Include regular categories
     categories.forEach(category => {
       yearlyTotals[year][category.code] = {
         spent: 0,
@@ -240,20 +347,42 @@ function calculateYearlyTotals(transactions: Transaction[], categories: Category
         transactions: []
       };
     });
+    
+    // Add special tracking for numeric codes
+    ['600', '23152'].forEach(specialCode => {
+      yearlyTotals[year][specialCode] = {
+        spent: 0,
+        budget: 0,
+        remaining: 0, 
+        transactions: [],
+        isSpecialCode: true
+      };
+    });
   });
 
   transactions.forEach(transaction => {
     const year = transaction.year.toString();
-    const categoryCode = transaction.categoryCode;
-    if (!categoryCode) return;
     
-    if (yearlyTotals[year][categoryCode]) {
-      yearlyTotals[year][categoryCode].spent += transaction.amount;
-      yearlyTotals[year][categoryCode].remaining = 
-        yearlyTotals[year][categoryCode].budget - yearlyTotals[year][categoryCode].spent;
-      yearlyTotals[year][categoryCode].transactions.push(transaction);
+    // Handle special numeric codes
+    if (/^0*(600|23152)$/.test(transaction.internalCode)) {
+      const code = transaction.internalCode.replace(/^0+/, '');
+      if (yearlyTotals[year][code]) {
+        yearlyTotals[year][code].spent += transaction.amount;
+        yearlyTotals[year][code].transactions.push(transaction);
+      }
+      return;
     }
+    
+    // Regular category processing
+    const categoryCode = transaction.categoryCode;
+    if (!categoryCode || !yearlyTotals[year][categoryCode]) return;
+    
+    yearlyTotals[year][categoryCode].spent += transaction.amount;
+    yearlyTotals[year][categoryCode].remaining = 
+      yearlyTotals[year][categoryCode].budget - yearlyTotals[year][categoryCode].spent;
+    yearlyTotals[year][categoryCode].transactions.push(transaction);
 
+    // Update parent category totals if exists
     const category = categories.find(c => c.code === categoryCode);
     if (!category) return;
 

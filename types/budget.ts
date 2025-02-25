@@ -9,6 +9,8 @@ export interface Category {
   }
   color?: string
   children?: Category[]
+  isSpecialCategory?: boolean
+  categoryType?: string
 }
 
 export interface CategoryFormData {
@@ -19,4 +21,6 @@ export interface CategoryFormData {
     [key: string]: number
   }
   color?: string
+  isSpecialCategory?: boolean
+  categoryType?: string
 }

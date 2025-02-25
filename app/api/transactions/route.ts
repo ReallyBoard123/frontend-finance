@@ -1,63 +1,85 @@
 // app/api/transactions/route.ts
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { logger } from '@/lib/logger'
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const type = searchParams.get('type')
-  
+export async function GET(request: NextRequest) {
   try {
-    const specialTypes = ['IVMC-Hochr.', 'ELVI']
-    const where = type === 'special' ? 
-      {
-        OR: [
-          { transactionType: { in: specialTypes } },
-          { internalCode: '23152' }
-        ]
-      } : 
-      {
-        AND: [
-          { transactionType: { notIn: specialTypes } },
-          { internalCode: { not: '23152' } }
-        ]
-      }
- 
+    const searchParams = request.nextUrl.searchParams;
+    const type = searchParams.get('type') || 'regular';
+    
+    // Get all transactions
     const transactions = await prisma.transaction.findMany({
-      where,
       include: {
-        category: true,
-        inquiries: true
+        category: true
       },
-      orderBy: { bookingDate: 'desc' }
-    })
- 
-    const formattedTransactions = transactions.map(transaction => {
-      // Format internal code to match F#### pattern
-      const formattedCode = transaction.category?.code || 
-        `F${transaction.internalCode.padStart(4, '0')}`;
-
-      return {
-        ...transaction,
-        categoryCode: formattedCode,
-        // Ensure dates are properly serialized
-        bookingDate: transaction.bookingDate.toISOString(),
-        invoiceDate: transaction.invoiceDate?.toISOString() || null,
-        // Format amounts to prevent floating point issues
-        amount: Number(transaction.amount.toFixed(2)),
-      };
+      orderBy: {
+        bookingDate: 'desc'
+      }
     });
- 
+    
+    // For debugging
+    console.log(`Found ${transactions.length} total transactions`);
+    
+    // Map database model to frontend model
+    const mappedTransactions = transactions.map(transaction => {
+      // Get category data from the relationship or metadata
+      const categoryData = transaction.category || { code: undefined, name: undefined };
+      const metadata = transaction.metadata ? (transaction.metadata as Record<string, unknown>) : {};
+      
+      // More explicit special transactions filter
+      const isSpecial = type === 'special' && (
+        transaction.transactionType === 'IVMC-Hochr.' || 
+        transaction.internalCode === '23152'
+      );
+      
+      const isRegular = type === 'regular' && 
+        transaction.transactionType !== 'IVMC-Hochr.' && 
+        transaction.internalCode !== '23152';
+      
+      // Return the transaction if it matches the requested type
+      if (isSpecial || isRegular) {
+        return {
+          id: transaction.id,
+          projectCode: transaction.projectCode,
+          year: transaction.year,
+          amount: transaction.amount,
+          internalCode: transaction.internalCode,
+          description: transaction.description,
+          costGroup: transaction.costGroup,
+          transactionType: transaction.transactionType,
+          documentNumber: transaction.documentNumber,
+          bookingDate: transaction.bookingDate,
+          personReference: transaction.personReference || null,
+          details: transaction.details || null,
+          invoiceDate: transaction.invoiceDate,
+          invoiceNumber: transaction.invoiceNumber || null,
+          paymentPartner: transaction.paymentPartner || null,
+          internalAccount: transaction.internalAccount || null,
+          accountLabel: transaction.accountLabel || null,
+          categoryId: transaction.categoryId,
+          // Use metadata for these fields if available or use raw data from internalCode
+          categoryCode: metadata.categoryCode || categoryData.code || (transaction.internalCode ? `${transaction.internalCode}` : null),
+          categoryName: metadata.categoryName || categoryData.name || null,
+          status: transaction.status,
+          requiresSpecialHandling: isSpecial
+        };
+      }
+      return null;
+    }).filter(Boolean);
+    
+    console.log(`Returning ${mappedTransactions.length} ${type} transactions`);
+    
     return NextResponse.json({
-      transactions: formattedTransactions,
-      count: transactions.length
-    })
+      transactions: mappedTransactions,
+      count: mappedTransactions.length
+    });
   } catch (error) {
-    logger.error(`Error fetching transactions: ${error}`)
+    console.error('Error fetching transactions:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch transactions' }, 
+      { error: 'Failed to fetch transactions' },
       { status: 500 }
-    )
+    );
   }
 }
 
@@ -80,19 +102,26 @@ export async function POST(request: Request) {
     const amount = Number(Number(data.amount).toFixed(2))
     const projectCode = data.projectCode?.toString()
     const internalCode = data.internalCode?.toString().padStart(4, '0')
-    const categoryCode = data.categoryCode || `F${internalCode}`
-
-    // Find category
-    const category = await prisma.category.findUnique({
-      where: { code: categoryCode }
-    })
-
-    if (!category && data.categoryCode) {
-      logger.error(`Category not found: ${categoryCode}`)
-      return NextResponse.json(
-        { error: 'Category not found' },
-        { status: 400 }
-      )
+    
+    // Only try to find a category if we explicitly have a categoryCode that's not a raw numeric code
+    let categoryId = null
+    let category = null
+    
+    if (data.categoryCode && data.categoryCode.startsWith('F')) {
+      // Try to find the category
+      category = await prisma.category.findUnique({
+        where: { code: data.categoryCode }
+      })
+      
+      if (category) {
+        categoryId = category.id
+      } else if (data.categoryCode) {
+        logger.error(`Category not found: ${data.categoryCode}`)
+        return NextResponse.json(
+          { error: 'Category not found' },
+          { status: 400 }
+        )
+      }
     }
 
     // Check for existing transaction
@@ -114,7 +143,12 @@ export async function POST(request: Request) {
       })
     }
 
-    // Create transaction
+    // Check if this is a numeric internal code that should be preserved
+    const rawInternalCode = data.internalCode?.toString() || ''
+    const isNumericInternalCode = /^\d+$/.test(rawInternalCode.replace(/^0+/, ''))
+    const needsReview = isNumericInternalCode && !category
+    
+    // Create transaction - now categoryId can be null
     const transaction = await prisma.transaction.create({
       data: {
         id: `${projectCode}-${year}-${documentNumber}-${internalCode}`,
@@ -136,7 +170,12 @@ export async function POST(request: Request) {
         accountLabel: data.accountLabel?.toString() || null,
         processed: false,
         status: data.status || 'unprocessed',
-        categoryId: category?.id || (await getDefaultCategory()).id,
+        categoryId, // This can now be null
+        metadata: {
+          originalInternalCode: data.internalCode,
+          needsReview,
+          categoryCode: category?.code
+        }
       },
       include: {
         category: true,
@@ -144,10 +183,14 @@ export async function POST(request: Request) {
       }
     })
 
+    // Generate the response - for numeric internal codes without categories, 
+    // use the internal code directly as the categoryCode for display
+    const displayCategoryCode = category?.code || (isNumericInternalCode ? internalCode : null)
+
     return NextResponse.json({
       transaction: {
         ...transaction,
-        categoryCode,
+        categoryCode: displayCategoryCode,
         bookingDate: transaction.bookingDate.toISOString(),
         invoiceDate: transaction.invoiceDate?.toISOString() || null,
         amount: Number(transaction.amount.toFixed(2))
@@ -171,7 +214,7 @@ export async function PATCH(
     
     // If categoryCode is provided, find the category
     let categoryId = data.categoryId
-    if (data.categoryCode && !categoryId) {
+    if (data.categoryCode && !categoryId && data.categoryCode.startsWith('F')) {
       const category = await prisma.category.findUnique({
         where: { code: data.categoryCode }
       })
@@ -180,12 +223,12 @@ export async function PATCH(
       }
     }
 
-    // Update transaction
+    // Update transaction - categoryId can now be null
     const transaction = await prisma.transaction.update({
       where: { id: params.id },
       data: {
         status: data.status,
-        categoryId: categoryId || undefined,
+        categoryId: categoryId, // Can be undefined or null
         processed: data.processed,
         personReference: data.personReference,
         details: data.details,
@@ -197,11 +240,13 @@ export async function PATCH(
       }
     })
 
+    // For numeric internal codes without categories, use the internal code directly
+    const displayCategoryCode = transaction.category?.code || transaction.internalCode
+
     return NextResponse.json({
       transaction: {
         ...transaction,
-        categoryCode: transaction.category?.code || 
-          `F${transaction.internalCode.padStart(4, '0')}`,
+        categoryCode: displayCategoryCode,
         bookingDate: transaction.bookingDate.toISOString(),
         invoiceDate: transaction.invoiceDate?.toISOString() || null,
         amount: Number(transaction.amount.toFixed(2))
@@ -214,13 +259,4 @@ export async function PATCH(
       { status: 500 }
     )
   }
-}
-
-// Helper function to get default category
-async function getDefaultCategory() {
-  const defaultCategory = await prisma.category.findFirst()
-  if (!defaultCategory) {
-    throw new Error('No default category found')
-  }
-  return defaultCategory
 }
