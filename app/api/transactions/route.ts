@@ -1,262 +1,186 @@
-// app/api/transactions/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { logger } from '@/lib/logger'
+import { createApiHandler } from '@/lib/api/api-handler';
+import { FilterParams, SortParams } from '@/types/common';
+import { TransactionBase } from '@/types/transaction';
+import { NextRequest } from 'next/server';
 
-export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
-    const type = searchParams.get('type') || 'regular';
-    
-    // Get all transactions
-    const transactions = await prisma.transaction.findMany({
-      include: {
-        category: true
-      },
-      orderBy: {
-        bookingDate: 'desc'
-      }
-    });
-    
-    // For debugging
-    console.log(`Found ${transactions.length} total transactions`);
-    
-    // Map database model to frontend model
-    const mappedTransactions = transactions.map(transaction => {
-      // Get category data from the relationship or metadata
-      const categoryData = transaction.category || { code: undefined, name: undefined };
-      const metadata = transaction.metadata ? (transaction.metadata as Record<string, unknown>) : {};
-      
-      // More explicit special transactions filter
-      const isSpecial = type === 'special' && (
-        transaction.transactionType === 'IVMC-Hochr.' || 
-        transaction.internalCode === '23152'
-      );
-      
-      const isRegular = type === 'regular' && 
-        transaction.transactionType !== 'IVMC-Hochr.' && 
-        transaction.internalCode !== '23152';
-      
-      // Return the transaction if it matches the requested type
-      if (isSpecial || isRegular) {
-        return {
-          id: transaction.id,
-          projectCode: transaction.projectCode,
-          year: transaction.year,
-          amount: transaction.amount,
-          internalCode: transaction.internalCode,
-          description: transaction.description,
-          costGroup: transaction.costGroup,
-          transactionType: transaction.transactionType,
-          documentNumber: transaction.documentNumber,
-          bookingDate: transaction.bookingDate,
-          personReference: transaction.personReference || null,
-          details: transaction.details || null,
-          invoiceDate: transaction.invoiceDate,
-          invoiceNumber: transaction.invoiceNumber || null,
-          paymentPartner: transaction.paymentPartner || null,
-          internalAccount: transaction.internalAccount || null,
-          accountLabel: transaction.accountLabel || null,
-          categoryId: transaction.categoryId,
-          // Use metadata for these fields if available or use raw data from internalCode
-          categoryCode: metadata.categoryCode || categoryData.code || (transaction.internalCode ? `${transaction.internalCode}` : null),
-          categoryName: metadata.categoryName || categoryData.name || null,
-          status: transaction.status,
-          requiresSpecialHandling: isSpecial
-        };
-      }
-      return null;
-    }).filter(Boolean);
-    
-    console.log(`Returning ${mappedTransactions.length} ${type} transactions`);
-    
-    return NextResponse.json({
-      transactions: mappedTransactions,
-      count: mappedTransactions.length
-    });
-  } catch (error) {
-    console.error('Error fetching transactions:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch transactions' },
-      { status: 500 }
-    );
-  }
+function generateTransactionId(transaction: TransactionBase): string {
+  const docNumber = transaction.documentNumber || `NO_DOC_${Date.now()}`;
+  return `${transaction.projectCode}-${transaction.year}-${docNumber}`;
 }
 
-export async function POST(request: Request) {
-  try {
-    const data = await request.json()
+function parseFilterParams(req: NextRequest): FilterParams {
+  const searchParams = req.nextUrl.searchParams;
+  
+  return {
+    type: searchParams.get('type') || undefined,
+    year: searchParams.get('year') || undefined,
+    status: (searchParams.get('status') as any) || undefined,
+    categoryCode: searchParams.get('categoryCode') || undefined,
+    search: searchParams.get('search') || undefined
+  };
+}
+
+function parseSortParams(req: NextRequest): SortParams | undefined {
+  const field = req.nextUrl.searchParams.get('sortBy');
+  const direction = req.nextUrl.searchParams.get('sortDir') as 'asc' | 'desc';
+  
+  if (field && (direction === 'asc' || direction === 'desc')) {
+    return { field, direction };
+  }
+  
+  return undefined;
+}
+
+export const GET = createApiHandler(async (req, context, prisma) => {
+  const filters = parseFilterParams(req);
+  const sort = parseSortParams(req);
+  
+  // Build the where clause
+  const where: any = {};
+  
+  if (filters.type === 'special') {
+    where.specialCategoryId = { not: null };
+  } else if (filters.type === 'regular') {
+    where.specialCategoryId = null;
+  }
+  
+  if (filters.year) {
+    where.year = Number(filters.year);
+  }
+  
+  if (filters.status) {
+    where.status = filters.status;
+  }
+  
+  if (filters.categoryCode) {
+    const category = await prisma.category.findUnique({
+      where: { code: filters.categoryCode }
+    });
+    if (category) {
+      where.categoryId = category.id;
+    }
+  }
+  
+  if (filters.search) {
+    where.OR = [
+      { description: { contains: filters.search, mode: 'insensitive' } },
+      { details: { contains: filters.search, mode: 'insensitive' } },
+      { personReference: { contains: filters.search, mode: 'insensitive' } },
+      { documentNumber: { contains: filters.search, mode: 'insensitive' } }
+    ];
+  }
+  
+  // Build the orderBy
+  const orderBy: any = {};
+  if (sort) {
+    orderBy[sort.field] = sort.direction;
+  } else {
+    orderBy.bookingDate = 'desc';
+  }
+  
+  // Get transactions
+  const [transactions, count] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      include: {
+        category: true,
+        specialCategory: true
+      },
+      orderBy
+    }),
+    prisma.transaction.count({ where })
+  ]);
+  
+  // Map to response format
+  const mappedTransactions = transactions.map(tx => {
+    const categoryCode = tx.category?.code || 
+      (tx.specialCategory?.code || tx.internalCode);
+      
+    return {
+      ...tx,
+      categoryCode,
+      categoryName: tx.category?.name || tx.specialCategory?.name,
+      bookingDate: tx.bookingDate.toISOString(),
+      invoiceDate: tx.invoiceDate?.toISOString() || null
+    };
+  });
+  
+  return {
+    data: mappedTransactions,
+    count
+  };
+}, { allowedMethods: ['GET'] });
+
+export const POST = createApiHandler(async (req, context, prisma) => {
+  const data = await req.json() as TransactionBase;
+  
+  // Check for existing transaction
+  const id = generateTransactionId(data);
+  const existing = await prisma.transaction.findUnique({
+    where: { id }
+  });
+  
+  if (existing) {
+    return {
+      message: 'Transaction already exists',
+      data: existing
+    };
+  }
+  
+  // Check if this matches a special category
+  let specialCategoryId = null;
+  const specialCategory = await prisma.specialCategory.findUnique({
+    where: { code: data.internalCode }
+  });
+  
+  if (specialCategory) {
+    specialCategoryId = specialCategory.id;
+  }
+  
+  // Check for category mapping
+  let categoryId = null;
+  if (!specialCategoryId && data.internalCode) {
+    // Try to find mapping
+    const mapping = await prisma.accountMapping.findUnique({
+      where: { internalCode: data.internalCode }
+    });
     
-    // Log incoming data
-    logger.log({
-      message: 'Processing new transaction',
-      documentNumber: data.documentNumber,
+    if (mapping) {
+      categoryId = mapping.categoryId;
+    }
+  }
+  
+  // Create transaction
+  const transaction = await prisma.transaction.create({
+    data: {
+      id,
+      projectCode: data.projectCode,
+      year: data.year,
+      amount: data.amount,
       internalCode: data.internalCode,
-      amount: data.amount
-    })
-
-    // Normalize data
-    const documentNumber = data.documentNumber?.toString() || `NO_DOC_${Date.now()}`
-    const year = Number(data.year)
-    const bookingDate = new Date(data.bookingDate)
-    const amount = Number(Number(data.amount).toFixed(2))
-    const projectCode = data.projectCode?.toString()
-    const internalCode = data.internalCode?.toString().padStart(4, '0')
-    
-    // Only try to find a category if we explicitly have a categoryCode that's not a raw numeric code
-    let categoryId = null
-    let category = null
-    
-    if (data.categoryCode && data.categoryCode.startsWith('F')) {
-      // Try to find the category
-      category = await prisma.category.findUnique({
-        where: { code: data.categoryCode }
-      })
-      
-      if (category) {
-        categoryId = category.id
-      } else if (data.categoryCode) {
-        logger.error(`Category not found: ${data.categoryCode}`)
-        return NextResponse.json(
-          { error: 'Category not found' },
-          { status: 400 }
-        )
-      }
+      description: data.description,
+      costGroup: data.costGroup || '',
+      transactionType: data.transactionType,
+      documentNumber: data.documentNumber || null,
+      bookingDate: new Date(data.bookingDate),
+      personReference: data.personReference || null,
+      details: data.details || null,
+      invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : null,
+      invoiceNumber: data.invoiceNumber || null,
+      paymentPartner: data.paymentPartner || null,
+      internalAccount: data.internalAccount || null,
+      accountLabel: data.accountLabel || null,
+      processed: false,
+      status: data.status || 'unprocessed',
+      categoryId,
+      specialCategoryId,
+      metadata: data.metadata || {}
+    },
+    include: {
+      category: true,
+      specialCategory: true
     }
-
-    // Check for existing transaction
-    const existing = await prisma.transaction.findFirst({
-      where: {
-        documentNumber,
-        projectCode,
-        year,
-        bookingDate,
-        internalCode,
-        amount
-      }
-    })
-
-    if (existing) {
-      return NextResponse.json({
-        message: 'Transaction already exists',
-        transaction: existing
-      })
-    }
-
-    // Check if this is a numeric internal code that should be preserved
-    const rawInternalCode = data.internalCode?.toString() || ''
-    const isNumericInternalCode = /^\d+$/.test(rawInternalCode.replace(/^0+/, ''))
-    const needsReview = isNumericInternalCode && !category
-    
-    // Create transaction - now categoryId can be null
-    const transaction = await prisma.transaction.create({
-      data: {
-        id: `${projectCode}-${year}-${documentNumber}-${internalCode}`,
-        projectCode,
-        year,
-        amount,
-        internalCode,
-        description: data.description?.toString().trim(),
-        costGroup: data.costGroup?.toString().trim(),
-        transactionType: data.transactionType?.toString().trim(),
-        documentNumber,
-        bookingDate,
-        personReference: data.personReference?.toString() || null,
-        details: data.details?.toString() || null,
-        invoiceDate: data.invoiceDate ? new Date(data.invoiceDate) : null,
-        invoiceNumber: data.invoiceNumber?.toString() || null,
-        paymentPartner: data.paymentPartner?.toString() || null,
-        internalAccount: data.internalAccount?.toString() || null,
-        accountLabel: data.accountLabel?.toString() || null,
-        processed: false,
-        status: data.status || 'unprocessed',
-        categoryId, // This can now be null
-        metadata: {
-          originalInternalCode: data.internalCode,
-          needsReview,
-          categoryCode: category?.code
-        }
-      },
-      include: {
-        category: true,
-        inquiries: true
-      }
-    })
-
-    // Generate the response - for numeric internal codes without categories, 
-    // use the internal code directly as the categoryCode for display
-    const displayCategoryCode = category?.code || (isNumericInternalCode ? internalCode : null)
-
-    return NextResponse.json({
-      transaction: {
-        ...transaction,
-        categoryCode: displayCategoryCode,
-        bookingDate: transaction.bookingDate.toISOString(),
-        invoiceDate: transaction.invoiceDate?.toISOString() || null,
-        amount: Number(transaction.amount.toFixed(2))
-      }
-    })
-  } catch (error) {
-    logger.error(`Error creating transaction: ${error}`)
-    return NextResponse.json(
-      { error: 'Failed to create transaction' },
-      { status: 500 }
-    )
-  }
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const data = await request.json()
-    
-    // If categoryCode is provided, find the category
-    let categoryId = data.categoryId
-    if (data.categoryCode && !categoryId && data.categoryCode.startsWith('F')) {
-      const category = await prisma.category.findUnique({
-        where: { code: data.categoryCode }
-      })
-      if (category) {
-        categoryId = category.id
-      }
-    }
-
-    // Update transaction - categoryId can now be null
-    const transaction = await prisma.transaction.update({
-      where: { id: params.id },
-      data: {
-        status: data.status,
-        categoryId: categoryId, // Can be undefined or null
-        processed: data.processed,
-        personReference: data.personReference,
-        details: data.details,
-        amount: data.amount ? Number(Number(data.amount).toFixed(2)) : undefined
-      },
-      include: {
-        category: true,
-        inquiries: true
-      }
-    })
-
-    // For numeric internal codes without categories, use the internal code directly
-    const displayCategoryCode = transaction.category?.code || transaction.internalCode
-
-    return NextResponse.json({
-      transaction: {
-        ...transaction,
-        categoryCode: displayCategoryCode,
-        bookingDate: transaction.bookingDate.toISOString(),
-        invoiceDate: transaction.invoiceDate?.toISOString() || null,
-        amount: Number(transaction.amount.toFixed(2))
-      }
-    })
-  } catch (error) {
-    logger.error(`Error updating transaction: ${error}`)
-    return NextResponse.json(
-      { error: 'Failed to update transaction' },
-      { status: 500 }
-    )
-  }
-}
+  });
+  
+  return { data: transaction };
+}, { allowedMethods: ['POST'] });

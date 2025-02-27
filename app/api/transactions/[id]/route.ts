@@ -1,90 +1,89 @@
-// app/api/transactions/[id]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/prisma';
+import { createApiHandler } from '@/lib/api/api-handler';
+import { TransactionUpdate } from '@/types/transaction';
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const { id } = params;
-    const data = await request.json();
-    
-    // Retrieve existing transaction
-    const existingTransaction = await prisma.transaction.findUnique({
-      where: { id }
-    });
-    
-    if (!existingTransaction) {
-      return NextResponse.json(
-        { error: 'Transaction not found' },
-        { status: 404 }
-      );
-    }
-
-    // Check for special numeric codes that should have null categoryId
-    let categoryId = data.categoryId;
-    const categoryCode = data.categoryCode;
-    
-    if (categoryCode && /^0*(600|23152)$/.test(categoryCode)) {
-      // For special codes, set categoryId to null but preserve the code in metadata
-      categoryId = null;
-    }
-
-    // Save metadata with previous state and additional fields if provided
-    const metadata = {
-      ...(existingTransaction.metadata as any || {}),
-      previousState: data.previousState || {},
-      categoryCode: data.categoryCode,
-      categoryName: data.categoryName,
-      // For special codes, explicitly mark as not needing review if status is completed
-      needsReview: categoryId === null && data.status !== 'completed'
+export const PATCH = createApiHandler(async (req, context, prisma) => {
+  const { id } = context.params;
+  const data = await req.json() as TransactionUpdate;
+  
+  // Retrieve existing transaction
+  const existingTransaction = await prisma.transaction.findUnique({
+    where: { id }
+  });
+  
+  if (!existingTransaction) {
+    return {
+      error: 'Transaction not found',
+      data: null
     };
-
-    // Update the transaction with fields that exist in the Prisma schema
-    const updatedTransaction = await prisma.transaction.update({
-      where: { id },
+  }
+  
+  // Create log entry for the change
+  if (data.previousState) {
+    await prisma.transactionLog.create({
       data: {
-        categoryId: categoryId, // This can be null
-        status: data.status || existingTransaction.status,
-        metadata: metadata
+        transactionId: id,
+        action: 'transaction_updated',
+        previousState: data.previousState || {},
+        currentState: {
+          categoryId: data.categoryId,
+          specialCategoryId: data.specialCategoryId,
+          status: data.status
+        },
+        note: `Transaction updated from status ${existingTransaction.status} to ${data.status}`,
+        performedBy: 'user'
       }
     });
-
-    // Create a log entry for this change
-    if ((data.categoryId !== existingTransaction.categoryId) || 
-        (data.categoryCode && (existingTransaction.metadata as any)?.categoryCode !== data.categoryCode)) {
-      await prisma.transactionLog.create({
-        data: {
-          transactionId: id,
-          action: 'category_assigned',
-          previousState: data.previousState || {},
-          currentState: {
-            categoryId: data.categoryId,
-            categoryCode: data.categoryCode,
-            categoryName: data.categoryName
-          },
-          note: `Category changed from ${(existingTransaction.metadata as any)?.categoryCode || 'unassigned'} to ${data.categoryCode}`,
-          performedBy: 'user'
-        }
-      });
-    }
-
-    // Return the display categoryCode based on whether it's a special numeric code
-    const displayCategoryCode = categoryId === null ? 
-      (categoryCode || existingTransaction.internalCode) : 
-      data.categoryCode;
-
-    return NextResponse.json({
-      ...updatedTransaction,
-      categoryCode: displayCategoryCode,
-      categoryName: data.categoryName
-    });
-  } catch (error) {
-    console.error('Error updating transaction:', error);
-    return NextResponse.json(
-      { error: 'Failed to update transaction' },
-      { status: 500 }
-    );
   }
-}
+  
+  // Update the transaction
+  const updatedTransaction = await prisma.transaction.update({
+    where: { id },
+    data: {
+      status: data.status,
+      categoryId: data.categoryId,
+      specialCategoryId: data.specialCategoryId,
+      metadata: data.metadata ? {
+        ...existingTransaction.metadata as Record<string, any>,
+        ...data.metadata
+      } : undefined
+    },
+    include: {
+      category: true,
+      specialCategory: true
+    }
+  });
+  
+  return { data: updatedTransaction };
+}, { allowedMethods: ['PATCH', 'PUT'] });
+
+export const DELETE = createApiHandler(async (req, context, prisma) => {
+  const { id } = context.params;
+  
+  // Check if transaction exists
+  const transaction = await prisma.transaction.findUnique({
+    where: { id }
+  });
+  
+  if (!transaction) {
+    return {
+      error: 'Transaction not found',
+      data: null
+    };
+  }
+  
+  // Delete related records first
+  await prisma.transactionLog.deleteMany({
+    where: { transactionId: id }
+  });
+  
+  await prisma.transactionInquiry.deleteMany({
+    where: { transactionId: id }
+  });
+  
+  // Delete the transaction
+  const deletedTransaction = await prisma.transaction.delete({
+    where: { id }
+  });
+  
+  return { data: deletedTransaction };
+}, { allowedMethods: ['DELETE'] });

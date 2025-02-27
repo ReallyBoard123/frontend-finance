@@ -1,28 +1,62 @@
-import { PrismaClient } from '@prisma/client';
-import { NextResponse } from 'next/server';
+import { createApiHandler } from '@/lib/api/api-handler';
 
-const prisma = new PrismaClient();
+interface AccountMappingData {
+  internalCode: string;
+  description: string;
+  categoryId: string;
+}
 
-export async function POST(req: Request) {
-    try {
-      const data = await req.json()
-      const mapping = await prisma.accountMapping.create({ data })
-      return NextResponse.json(mapping)
-    } catch (error) {
-      return NextResponse.json({ error: 'Failed to create mapping' }, { status: 500 })
+export const GET = createApiHandler(async (req, context, prisma) => {
+  const mappings = await prisma.accountMapping.findMany({
+    where: { active: true },
+    include: {
+      category: true
     }
+  });
+  
+  return { data: mappings };
+}, { allowedMethods: ['GET'] });
+
+export const POST = createApiHandler(async (req, context, prisma) => {
+  const data = await req.json() as AccountMappingData;
+  
+  // Validate required fields
+  if (!data.internalCode || !data.categoryId) {
+    return {
+      error: 'internalCode and categoryId are required',
+      data: null
+    };
   }
   
-  export async function GET(req: Request) {
-    try {
-      const mappings = await prisma.accountMapping.findMany({
-        where: { active: true },
-        include: {
-          category: true
-        }
-      })
-      return NextResponse.json(mappings)
-    } catch (error) {
-      return NextResponse.json({ error: 'Failed to fetch mappings' }, { status: 500 })
-    }
+  // Check if mapping already exists
+  const existing = await prisma.accountMapping.findUnique({
+    where: { internalCode: data.internalCode }
+  });
+  
+  if (existing) {
+    // Update existing mapping
+    const updated = await prisma.accountMapping.update({
+      where: { id: existing.id },
+      data: {
+        categoryId: data.categoryId,
+        description: data.description,
+        active: true
+      },
+      include: {
+        category: true
+      }
+    });
+    
+    return { data: updated };
   }
+  
+  // Create new mapping
+  const mapping = await prisma.accountMapping.create({
+    data,
+    include: {
+      category: true
+    }
+  });
+  
+  return { data: mapping };
+}, { allowedMethods: ['POST'] });

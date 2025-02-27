@@ -1,16 +1,33 @@
-// app/api/export/route.ts
-import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
 
-export async function GET() {
+const prisma = new PrismaClient();
+
+
+export async function GET(req: NextRequest) {
   try {
+    const searchParams = req.nextUrl.searchParams;
+    const format = searchParams.get('format') || 'csv';
+    const year = searchParams.get('year');
+    
+    const whereClause: any = {};
+    if (year) {
+      whereClause.year = parseInt(year);
+    }
+    
     const transactions = await prisma.transaction.findMany({
+      where: whereClause,
       include: {
         category: true,
-        inquiries: true
+        specialCategory: true
       }
     });
 
+    if (format === 'json') {
+      return NextResponse.json({ data: transactions });
+    }
+    
+    // Default to CSV format
     const headers = [
       'id', 'projectCode', 'year', 'amount', 'internalCode',
       'description', 'costGroup', 'transactionType', 'documentNumber',
@@ -19,12 +36,21 @@ export async function GET() {
 
     const csv = [
       headers.join(','),
-      ...transactions.map(t => headers.map(h => {
-        const value = h === 'categoryCode' ? t.category?.code : t[h as keyof typeof t];
-        if (value instanceof Date) return value.toISOString();
-        if (typeof value === 'string' && value.includes(',')) return `"${value}"`;
-        return String(value ?? '');
-      }).join(','))
+      ...transactions.map(t => {
+        const categoryCode = t.category?.code || t.specialCategory?.code || t.internalCode;
+        
+        return headers.map(h => {
+          const value = h === 'categoryCode' 
+            ? categoryCode 
+            : h === 'bookingDate'
+              ? t.bookingDate.toISOString().split('T')[0]
+              : (t as any)[h];
+          
+          if (value instanceof Date) return value.toISOString().split('T')[0];
+          if (typeof value === 'string' && value.includes(',')) return `"${value}"`;
+          return String(value ?? '');
+        }).join(',');
+      })
     ].join('\n');
 
     return new NextResponse(csv, {

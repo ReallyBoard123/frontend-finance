@@ -8,86 +8,106 @@ datasource db {
 }
 
 model Category {
-  id              String            @id @default(cuid())
-  code            String            @unique
-  name            String
-  parentId        String?
-  parent          Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children        Category[]        @relation("CategoryHierarchy")
-  transactions    Transaction[]
-  budgets         Json?        
-  isLeaf          Boolean           @default(true)
-  color           String?
-  isSpecialCategory Boolean         @default(false)
-  categoryType    String?           // "BUDGET", "ALLOCATION", "PAYMENT"
-  accountMappings AccountMapping[]
-  categoryBudgets CategoryBudget[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id                String            @id @default(cuid())
+  code              String            @unique
+  name              String
+  parentId          String?
+  parent            Category?         @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children          Category[]        @relation("CategoryHierarchy")
+  transactions      Transaction[]
+  budgets           Json?             // Flexible structure for yearly budgets
+  isLeaf            Boolean           @default(true)
+  color             String?
+  metadata          Json?             // For additional custom fields
+  accountMappings   AccountMapping[]
+  categoryBudgets   CategoryBudget[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([parentId])
+}
+
+model SpecialCategory {
+  id                String            @id @default(cuid())
+  code              String            @unique  // The special code (e.g., "600", "23152")
+  name              String
+  description       String?
+  type              String            // "ALLOCATION", "PAYMENT", etc.
+  excludeFromTotals Boolean           @default(true)
+  metadata          Json?
+  transactions      Transaction[]     @relation("SpecialCategoryTransactions")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([type])
+  @@index([code])
+}
+
+model Transaction {
+  id                String            @id
+  projectCode       String
+  year              Int
+  amount            Float
+  internalCode      String
+  description       String
+  costGroup         String?
+  transactionType   String
+  documentNumber    String?
+  bookingDate       DateTime
+  personReference   String?
+  details           String?
+  invoiceDate       DateTime?
+  invoiceNumber     String?
+  paymentPartner    String?
+  internalAccount   String?
+  accountLabel      String?
+  processed         Boolean           @default(false)
+  status            String            @default("unprocessed")
+  metadata          Json?
+  
+  // Category relationships - both are optional
+  categoryId        String?
+  category          Category?         @relation(fields: [categoryId], references: [id])
+  
+  specialCategoryId String?
+  specialCategory   SpecialCategory?  @relation("SpecialCategoryTransactions", fields: [specialCategoryId], references: [id])
+  
+  // Related records
+  logs              TransactionLog[]
+  inquiries         TransactionInquiry[]
+
+  @@index([year])
+  @@index([internalCode])
+  @@index([categoryId])
+  @@index([specialCategoryId])
+  @@index([bookingDate])
+  @@index([status])
+  @@index([documentNumber])
 }
 
 model TransactionInquiry {
   id            String      @id @default(cuid())
-  transactionId String      
+  transactionId String
   transaction   Transaction @relation(fields: [transactionId], references: [id])
   note          String
   status        String      @default("pending")
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
-}
 
-model Transaction {
-  id                String      @id
-  projectCode      String      
-  year             Int
-  amount           Float       
-  internalCode     String      
-  description      String      
-  costGroup        String      
-  transactionType  String      
-  documentNumber   String?     
-  bookingDate      DateTime    
-  personReference  String?     
-  details          String?     
-  invoiceDate      DateTime?   
-  invoiceNumber    String?     
-  paymentPartner   String?     
-  internalAccount  String?     
-  accountLabel     String?     
-  requiresSpecialHandling Boolean @default(false)
-  processed        Boolean     @default(false)  
-  status           String      @default("unprocessed")
-  
-  // New split-related fields
-  isSplit         Boolean     @default(false)
-  totalSplits     Int         @default(0)
-  splitIndex      Int         @default(0)
-  originalAmount  Float?
-  metadata        Json?     // For storing additional data like previousState
-  logs            TransactionLog[]
-  categoryId      String?     // Changed from required to optional
-  category        Category?   @relation(fields: [categoryId], references: [id]) // Made optional
-  inquiries       TransactionInquiry[]
-  
-  @@index([year])
-  @@index([internalCode])
-  @@index([categoryId])
-  @@index([bookingDate])
-  @@index([processed])
-  @@index([documentNumber])
+  @@index([status])
+  @@index([transactionId])
 }
 
 model AccountMapping {
   id            String    @id @default(cuid())
-  internalCode  String    
-  description   String    
-  categoryId    String    
+  internalCode  String    @unique
+  description   String
+  categoryId    String
   category      Category  @relation(fields: [categoryId], references: [id])
-  active        Boolean   @default(true)  
+  active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  @@unique([internalCode])
   @@index([categoryId])
 }
 
@@ -95,9 +115,9 @@ model CategoryBudget {
   id          String    @id @default(cuid())
   categoryId  String
   year        Int
-  amount      Float     
-  spent       Float     @default(0)  
-  remaining   Float     @default(0)  
+  amount      Float
+  spent       Float     @default(0)
+  remaining   Float     @default(0)
   category    Category  @relation(fields: [categoryId], references: [id])
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -107,15 +127,15 @@ model CategoryBudget {
 }
 
 model TransactionLog {
-  id            String    @id @default(cuid())
+  id            String      @id @default(cuid())
   transactionId String
   transaction   Transaction @relation(fields: [transactionId], references: [id])
-  action        String    // e.g., "category_assigned", "status_changed", etc.
-  previousState Json?     // Store previous state
-  currentState  Json?     // Store new state
-  note          String?   // Optional note describing the change
-  performedBy   String    // User or system that performed the action
-  createdAt     DateTime  @default(now())
+  action        String
+  previousState Json?
+  currentState  Json?
+  note          String?
+  performedBy   String
+  createdAt     DateTime    @default(now())
 
   @@index([transactionId])
   @@index([action])
