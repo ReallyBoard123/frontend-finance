@@ -17,37 +17,35 @@ export interface Transaction {
   paymentPartner?: string;
   internalAccount?: string;
   accountLabel?: string;
-  categoryId?: string | null; // Made optional
+  categoryId?: string | null;
   categoryCode?: string;
   categoryName?: string;
   requiresSpecialHandling: boolean;
   categoryParentCode?: string | null;
   categoryParentId?: string | null;
-  status?: 'pending' | 'completed' | 'unprocessed' | 'pending_inquiry';
-  inquiries?: TransactionInquiry[];
+  status?: TransactionStatus;
+  previousState?: TransactionPreviousState | null;
+  metadata?: Record<string, any>;
+}
+
+export type TransactionStatus = 'pending' | 'completed' | 'unprocessed' | 'pending_inquiry';
+
+export interface TransactionPreviousState {
+  status?: TransactionStatus;
   note?: string;
-  previousState?: {
-    status?: string;
-    note?: string;
-    categoryCode?: string;
-  } | null;
-  metadata?: Record<string, any>
+  categoryCode?: string;
+  categoryId?: string;
+  categoryName?: string;
 }
 
 export interface TransactionUpdate {
   id?: string;
-  status?: 'pending' | 'completed' | 'unprocessed' | 'pending_inquiry';
+  status?: TransactionStatus;
   note?: string;
   categoryCode?: string;
-  categoryId?: string | null; // Made optional
+  categoryId?: string | null;
   categoryName?: string;
-  previousState?: {
-    status?: string;
-    note?: string;
-    categoryCode?: string;
-    categoryId?: string;
-    categoryName?: string;
-  } | null;
+  previousState?: TransactionPreviousState | null;
 }
 
 export interface CategoryTotal {
@@ -55,6 +53,7 @@ export interface CategoryTotal {
   budget: number;
   remaining: number;
   transactions: Transaction[];
+  isSpecialCategory?: boolean;
 }
 
 export interface YearlyTotals {
@@ -67,13 +66,6 @@ export interface ProcessedData {
   transactions: Transaction[];
   yearlyTotals: YearlyTotals;
   specialTransactions: Transaction[];
-}
-
-export interface BudgetUpdate {
-  categoryCode: string;
-  year: number;
-  spent: number;
-  remaining: number;
 }
 
 export interface TransactionInquiry {

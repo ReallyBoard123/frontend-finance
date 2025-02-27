@@ -1,7 +1,8 @@
 import React from 'react';
-import { Button } from "@/components/ui/button";
-import { ProcessedData } from '@/types/transactions';
-import { Category } from '@/types/budget';
+import { ActionButton } from "@/components/common/ui/action-button";
+import { useCategoryOperations } from '@/lib/hooks/useCategoryOperations';
+import type { ProcessedData } from '@/types/transactions';
+import type { Category } from '@/types/budget';
 
 interface CostVerificationProps {
   processedData: ProcessedData | null;
@@ -14,19 +15,7 @@ export function CostVerification({
   categories,
   onVerificationComplete 
 }: CostVerificationProps) {
-  const calculateTotalBudget = (categoryId: string, year: string): number => {
-    const category = categories.find(c => c.id === categoryId);
-    if (!category) return 0;
-
-    const childCategories = categories.filter(c => c.parentId === categoryId);
-    if (childCategories.length === 0) {
-      return category.budgets[year] || 0;
-    }
-
-    return childCategories.reduce((sum, child) => 
-      sum + (child.budgets[year] || 0), 0
-    );
-  };
+  const { calculateTotalBudget } = useCategoryOperations();
 
   const handleVerify = () => {
     if (!processedData) return;
@@ -68,12 +57,11 @@ export function CostVerification({
   };
 
   return (
-    <Button 
+    <ActionButton 
       onClick={handleVerify}
       disabled={!processedData}
       variant="outline"
-    >
-      Verify Data
-    </Button>
+      label="Verify Data"
+    />
   );
 }

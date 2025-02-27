@@ -12,7 +12,7 @@ export const formatDate = (dateString: string | Date) => {
       return new Date(dateString).toLocaleDateString('de-DE');
     }
     return dateString.toLocaleDateString('de-DE');
-  } catch (error) {
+  } catch {
     console.error('Error formatting date:', dateString);
     return String(dateString);
   }

@@ -1,15 +1,15 @@
-import React, { useEffect } from 'react'
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import { z } from "zod"
-import { FolderTree } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
-import type { Category, CategoryFormData } from "@/types/budget"
-import { Checkbox } from '../ui/checkbox'
+// components/budget/category-form.tsx
+import React from 'react';
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { FormDialog } from "@/components/common/dialogs/form-dialog";
+import { Input } from "@/components/ui/input";
+import { CategorySelect } from "@/components/common/ui/category-select";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useCategoryOperations } from '@/lib/hooks/useCategoryOperations';
 
 const categorySchema = z.object({
   code: z.string().regex(/^F\d{4}$/, "Must be in format F#### (e.g., F0861)"),
@@ -19,18 +19,18 @@ const categorySchema = z.object({
   parentId: z.string().nullable(),
   budgets: z.record(z.string(), z.number().min(0, "Budget must be positive")).optional(),
   color: z.string().optional()
-})
+});
 
 type CategoryFormSchema = z.infer<typeof categorySchema>;
 
 interface CategoryFormProps {
-  categories: Category[]
-  onSubmit: (data: CategoryFormData) => void
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function CategoryForm({ categories, onSubmit, open, onOpenChange }: CategoryFormProps) {
+export function CategoryForm({ open, onOpenChange }: CategoryFormProps) {
+  const { categories, isLoading, addCategory } = useCategoryOperations();
+  
   const form = useForm<CategoryFormSchema>({
     resolver: zodResolver(categorySchema),
     defaultValues: {
@@ -46,13 +46,13 @@ export function CategoryForm({ categories, onSubmit, open, onOpenChange }: Categ
       },
       color: ''
     }
-  })
+  });
   
   const isSpecialCategory = form.watch("isSpecialCategory");
   const categoryType = form.watch("categoryType");
 
   // Auto-fill fields for special categories
-  useEffect(() => {
+  React.useEffect(() => {
     if (isSpecialCategory && categoryType) {
       if (categoryType === "ALLOCATION") {
         form.setValue("code", "F0600");
@@ -64,20 +64,23 @@ export function CategoryForm({ categories, onSubmit, open, onOpenChange }: Categ
     }
   }, [isSpecialCategory, categoryType, form]);
 
-  const handleSubmit = (data: CategoryFormSchema) => {
-    onSubmit(data)
-    form.reset()
-  }
+  const handleSubmit = async (data: CategoryFormSchema) => {
+    await addCategory(data);
+    form.reset();
+    onOpenChange(false);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Add New Category</DialogTitle>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-
+    <FormDialog
+      title="Add New Category"
+      isOpen={open}
+      onClose={() => onOpenChange(false)}
+      onSubmit={form.handleSubmit(handleSubmit)}
+      isSubmitting={isLoading}
+      submitLabel="Create Category"
+    >
+      <Form {...form}>
+        <div className="space-y-4">
           <FormField
             control={form.control}
             name="isSpecialCategory"
@@ -125,7 +128,6 @@ export function CategoryForm({ categories, onSubmit, open, onOpenChange }: Categ
             />
           )}
 
-          {/* Only show code/name fields for normal categories or if no special category type selected */}
           {(!isSpecialCategory || !categoryType) && (
             <>
               <FormField
@@ -163,24 +165,14 @@ export function CategoryForm({ categories, onSubmit, open, onOpenChange }: Categ
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Parent Category</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value || "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select parent category" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">No Parent</SelectItem>
-                        {categories.map(category => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.code} - {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <CategorySelect 
+                        categories={categories}
+                        selectedCategoryId={field.value || ''}
+                        onSelect={field.onChange}
+                        placeholder="Select parent category"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -202,7 +194,6 @@ export function CategoryForm({ categories, onSubmit, open, onOpenChange }: Categ
             </>
           )}
 
-          {/* Only show budget fields for normal categories */}
           {!isSpecialCategory && [2023, 2024, 2025].map(year => (
             <FormField
               key={year}
@@ -224,14 +215,8 @@ export function CategoryForm({ categories, onSubmit, open, onOpenChange }: Categ
               )}
             />
           ))}
-
-            <Button type="submit" className="w-full">
-              <FolderTree className="mr-2 h-4 w-4" />
-              Create Category
-            </Button>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-  )
+        </div>
+      </Form>
+    </FormDialog>
+  );
 }

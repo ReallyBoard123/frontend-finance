@@ -1,39 +1,50 @@
 // components/budget/enhanced-category-tree.tsx
-import React, { useState } from 'react'
+import React, { useState } from 'react';
 import { 
   Table, TableBody, TableCell, TableHead, 
   TableHeader, TableRow 
-} from "@/components/ui/table"
-import { ChevronDown, ChevronRight, Edit2, Search, SortAsc, Plus } from 'lucide-react'
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { EditCategoryForm } from './edit-category-form'
-import { Checkbox } from "@/components/ui/checkbox"
-import { Category, CategoryFormData } from '@/types/budget'
+} from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { EditCategoryForm } from './edit-category-form';
+import { FilterBar } from '@/components/common/ui/filter-bar';
 
+import { ActionButton } from '@/components/common/ui/action-button';
+import { Edit2 } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Category, CategoryFormData } from '@/types/budget';
+import { useCategoryTree } from '@/lib/hooks/useCategoryTree';
+import { useSelectionState } from '@/lib/hooks/useSelectionState';
+import { ExpandableRow } from '../common/ui/expandabale-row';
 
 interface EnhancedCategoryTreeProps {
-  categories: Category[]
-  years: number[]
-  onUpdateBudget: (categoryId: string, year: string, value: number) => void
-  onUpdateCategory: (categoryId: string, data: CategoryFormData) => void
+  categories: Category[];
+  years: number[];
+  onUpdateBudget: (categoryId: string, year: string, value: number) => void;
+  onUpdateCategory?: (categoryId: string, data: CategoryFormData) => void;
 }
 
 export function EnhancedCategoryTree({ 
   categories, 
   years, 
-  onUpdateBudget,
-  onUpdateCategory 
+  onUpdateBudget
 }: EnhancedCategoryTreeProps) {
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
-  const [editingCell, setEditingCell] = useState<{id: string, year: string} | null>(null)
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set())
-  const [filter, setFilter] = useState("")
-  const [sortConfig, setSortConfig] = useState<{key: 'code' | 'name', direction: 'asc' | 'desc'}>({
-    key: 'code',
-    direction: 'asc'
-  })
+  const {
+    expandedRows, 
+    filter, 
+    setFilter,
+    handleSort,
+    getChildCategories,
+    toggleExpand
+  } = useCategoryTree(categories);
+  
+  const {
+    selectedItems: selectedCategories,
+    toggleSelection: toggleRowSelect,
+    clearSelection
+  } = useSelectionState();
+  
+  const [editingCell, setEditingCell] = useState<{id: string, year: string} | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
   const calculateTotalBudget = (categoryId: string, year: string): number => {
     const category = categories.find(c => c.id === categoryId);
@@ -52,67 +63,24 @@ export function EnhancedCategoryTree({
     );
   };
 
-  const getChildCategories = (parentId: string | null): Category[] => {
-    let filtered = categories.filter(category => category.parentId === parentId)
-    
-    if (filter) {
-      filtered = filtered.filter(category => 
-        category.code.toLowerCase().includes(filter.toLowerCase()) ||
-        category.name.toLowerCase().includes(filter.toLowerCase())
-      )
-    }
-
-    return filtered.sort((a, b) => {
-      const compare = sortConfig.direction === 'asc' ? 1 : -1
-      return a[sortConfig.key] > b[sortConfig.key] ? compare : -compare
-    })
-  }
-
-  const handleSort = (key: 'code' | 'name') => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }))
-  }
-
-  const toggleExpand = (categoryId: string) => {
-    const newExpanded = new Set(expandedRows)
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId)
-    } else {
-      newExpanded.add(categoryId)
-    }
-    setExpandedRows(newExpanded)
-  }
-
   const handleCellClick = (categoryId: string, year: string) => {
-    setEditingCell({ id: categoryId, year })
-  }
+    setEditingCell({ id: categoryId, year });
+  };
 
   const handleCellEdit = (e: React.KeyboardEvent<HTMLInputElement>, categoryId: string, year: string) => {
     if (e.key === 'Enter') {
-      const value = parseFloat((e.target as HTMLInputElement).value)
+      const value = parseFloat((e.target as HTMLInputElement).value);
       if (!isNaN(value)) {
-        onUpdateBudget(categoryId, year, value)
+        onUpdateBudget(categoryId, year, value);
       }
-      setEditingCell(null)
+      setEditingCell(null);
     }
-  }
-
-  const handleRowSelect = (categoryId: string) => {
-    const newSelected = new Set(selectedCategories)
-    if (newSelected.has(categoryId)) {
-      newSelected.delete(categoryId)
-    } else {
-      newSelected.add(categoryId)
-    }
-    setSelectedCategories(newSelected)
-  }
+  };
 
   const handleEdit = (category: Category) => {
-    setEditingCategory(category)
-    setSelectedCategories(new Set())
-  }
+    setEditingCategory(category);
+    clearSelection();
+  };
 
   const [clickCount, setClickCount] = useState<{id: string; count: number; timer: NodeJS.Timeout | null}>({
     id: '',
@@ -148,18 +116,13 @@ export function EnhancedCategoryTree({
         }, 300)
       });
     }
-  }
-
-  const handleEditSubmit = (categoryId: string, data: CategoryFormData) => {
-    onUpdateCategory(categoryId, data)
-    setEditingCategory(null)
-  }
+  };
 
   const renderCategory = (category: Category, level: number) => {
-    const children = getChildCategories(category.id)
-    const isExpanded = expandedRows.has(category.id)
-    const hasChildren = children.length > 0
-    const isSelected = selectedCategories.has(category.id)
+    const children = getChildCategories(category.id);
+    const isExpanded = expandedRows.has(category.id);
+    const hasChildren = children.length > 0;
+    const isSelected = selectedCategories.has(category.id);
     
     return (
       <React.Fragment key={category.id}>
@@ -168,23 +131,37 @@ export function EnhancedCategoryTree({
           style={{ backgroundColor: !isSelected ? (category.color || 'transparent') : undefined }}
           onClick={() => handleRowClick(category)}
         >
-          <TableCell className="flex items-center" style={{ paddingLeft: `${level * 20}px` }}>
-            {hasChildren && (
-              <Button 
-                variant="ghost" 
-                size="sm"
-                className="p-0 h-6 w-6 mr-2"
-                onClick={() => toggleExpand(category.id)}
-              >
-                {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              </Button>
-            )}
-            <Checkbox
-              checked={isSelected}
-              onCheckedChange={() => handleRowSelect(category.id)}
-              className="mr-2"
-            />
-            <span className="mr-2">{category.code}</span>
+          <TableCell>
+            <div className="flex items-center">
+              {hasChildren && (
+                <ExpandableRow 
+                  isExpanded={isExpanded}
+                  onToggle={() => toggleExpand(category.id)}
+                  level={level}
+                >
+                  <div className="flex items-center">
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => toggleRowSelect(category.id)}
+                      className="mr-2"
+                      onClick={e => e.stopPropagation()}
+                    />
+                    <span>{category.code}</span>
+                  </div>
+                </ExpandableRow>
+              )}
+              {!hasChildren && (
+                <div className="flex items-center" style={{ paddingLeft: `${level * 20}px` }}>
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={() => toggleRowSelect(category.id)}
+                    className="mr-2"
+                    onClick={e => e.stopPropagation()}
+                  />
+                  <span>{category.code}</span>
+                </div>
+              )}
+            </div>
           </TableCell>
           <TableCell>{category.name}</TableCell>
           {years.map((year) => (
@@ -205,78 +182,64 @@ export function EnhancedCategoryTree({
                 />
               ) : (
                 hasChildren ? 
-                  calculateTotalBudget(category.id, year.toString()).toLocaleString('de-DE', {
+                  new Intl.NumberFormat('de-DE', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
-                  }) :
-                  (category.budgets[year.toString()] || 0).toLocaleString('de-DE', {
+                  }).format(calculateTotalBudget(category.id, year.toString())) :
+                  new Intl.NumberFormat('de-DE', {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2
-                  })
+                  }).format(category.budgets[year.toString()] || 0)
               )}
             </TableCell>
           ))}
           <TableCell className="text-right font-bold">
-            {years.reduce((sum, year) => 
+            {new Intl.NumberFormat('de-DE', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            }).format(years.reduce((sum, year) => 
               sum + (hasChildren ? 
                 calculateTotalBudget(category.id, year.toString()) : 
                 (category.budgets[year.toString()] || 0)
-              ), 0
-            ).toLocaleString('de-DE', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-            })}
+              ), 0)
+            )}
           </TableCell>
         </TableRow>
         {isExpanded && children.map(child => renderCategory(child, level + 1))}
       </React.Fragment>
-    )
-  }
+    );
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-          <Input
-            placeholder="Filter categories..."
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        <Button 
-          variant="outline" 
-          onClick={() => handleSort('code')}
-          className="gap-2"
-        >
-          <SortAsc size={16} />
-          Sort by Code
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={() => handleSort('name')}
-          className="gap-2"
-        >
-          <SortAsc size={16} />
-          Sort by Name
-        </Button>
+      <div className="flex gap-4 justify-between">
+        <FilterBar
+          filter={filter}
+          onFilterChange={setFilter}
+          onSort={key => handleSort(key as 'code' | 'name')}
+          sortFields={[
+            { key: 'code', label: 'Sort by Code' },
+            { key: 'name', label: 'Sort by Name' }
+          ]}
+          placeholder="Filter categories..."
+          className="flex-1"
+        />
+        
         {selectedCategories.size === 1 && (
-          <Button
+          <ActionButton
             onClick={() => {
-              const categoryId = Array.from(selectedCategories)[0]
-              const category = categories.find(c => c.id === categoryId)
+              const categoryId = Array.from(selectedCategories)[0];
+              const category = categories.find(c => c.id === categoryId);
               if (category) {
-                handleEdit(category)
+                handleEdit(category);
               }
             }}
-            className="gap-2"
-          >
-            <Edit2 size={16} />
-            Edit Category
-          </Button>
+            icon={Edit2}
+            label="Edit Category"
+          />
         )}
       </div>
+      
       <Table>
         <TableHeader>
           <TableRow>
@@ -292,15 +255,14 @@ export function EnhancedCategoryTree({
           {getChildCategories(null).map(category => renderCategory(category, 0))}
         </TableBody>
       </Table>
+      
       {editingCategory && (
         <EditCategoryForm
           category={editingCategory}
-          categories={categories}
           open={!!editingCategory}
           onOpenChange={(open) => !open && setEditingCategory(null)}
-          onSubmit={handleEditSubmit}
         />
       )}
     </div>
-  )
+  );
 }

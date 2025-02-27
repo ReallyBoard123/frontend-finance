@@ -1,51 +1,61 @@
-import React, { useState, useMemo } from 'react';
-import { ChevronDown, ChevronRight, Search } from 'lucide-react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import React from 'react';
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FilterBar } from '@/components/common/ui/filter-bar';
+import { ActionButton } from '@/components/common/ui/action-button';
 import { CostCell } from './cost-cell';
+import { ExpandableRow } from '@/components/common/ui/expandabale-row';
+import { useTransactionOperations } from '@/lib/hooks/useTransactionOperations';
+import { useCategoryTree } from '@/lib/hooks/useCategoryTree';
+import { useExpandableRows } from '@/lib/hooks/useExpandableRows';
+import { RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import type { Category } from '@/types/budget';
 import type { YearlyTotals } from '@/types/transactions';
-import { useFinanceStore } from '@/lib/store';
-import { RefreshCw, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
 
 interface CostsSummaryProps {
   categories: Category[];
   yearlyTotals: YearlyTotals;
   onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void;
   isInspectMode?: boolean;
+  years?: string[];
 }
 
 export function CostsSummary({ 
   categories, 
   yearlyTotals, 
   onCellClick, 
-  isInspectMode = false 
+  isInspectMode = false,
+  years = ['2023', '2024', '2025']
 }: CostsSummaryProps) {
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const [filter, setFilter] = useState("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const { fetchTransactions } = useFinanceStore();
-  const [sortConfig, setSortConfig] = useState<{
-    key: 'code' | 'name',
-    direction: 'asc' | 'desc'
-  }>({
-    key: 'code',
-    direction: 'asc'
-  });
+  const {
+    filter, 
+    setFilter,
+    sortConfig, 
+    handleSort,
+    getChildCategories,
+  } = useCategoryTree(categories);
+  
+  const {
+    expandedRows,
+    toggleExpand,
+  } = useExpandableRows();
 
-  const years = ['2023', '2024', '2025'];
+  const { fetchTransactions } = useTransactionOperations();
+  
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
-  const toggleExpand = (categoryId: string) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(categoryId)) {
-      newExpanded.delete(categoryId);
-    } else {
-      newExpanded.add(categoryId);
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchTransactions();
+      toast.success('Data refreshed successfully');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toast.error('Failed to refresh data');
+    } finally {
+      setIsRefreshing(false);
     }
-    setExpandedRows(newExpanded);
   };
 
   const calculateTotalBudget = (categoryId: string, year: string): number => {
@@ -65,19 +75,6 @@ export function CostsSummary({
     );
   };
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await fetchTransactions();
-      toast.success('Data refreshed successfully');
-    } catch (error) {
-      console.error('Error refreshing data:', error);
-      toast.error('Failed to refresh data');
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
   const calculateTotalSpent = (categoryId: string, year: string): number => {
     const totals = yearlyTotals[year];
     if (!totals) return 0;
@@ -95,7 +92,7 @@ export function CostsSummary({
     );
   };
 
-  const getFilteredCategories = (parentId: string | null): Category[] => {
+  const getFilteredCategories = (parentId: string | null) => {
     let filtered = categories.filter(category => category.parentId === parentId);
     
     if (filter) {
@@ -111,15 +108,29 @@ export function CostsSummary({
     });
   };
 
-  const handleSort = (key: 'code' | 'name') => {
-    setSortConfig(prev => ({
-      key,
-      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
-    }));
-  };
+  const totalsByYear = React.useMemo(() => {
+    return years.reduce((acc, year) => {
+      const rootCategories = getFilteredCategories(null);
+      const yearTotals = rootCategories.reduce((totals, category) => {
+        // Skip special categories in budget totals
+        if (category.isSpecialCategory) return totals;
+        
+        const budget = calculateTotalBudget(category.id, year);
+        const spent = calculateTotalSpent(category.id, year);
+        return {
+          budget: totals.budget + budget,
+          spent: totals.spent + spent
+        };
+      }, { budget: 0, spent: 0 });
+      acc[year] = yearTotals;
+      return acc;
+    }, {} as Record<string, { budget: number, spent: number }>);
+  }, [years, getFilteredCategories, calculateTotalBudget, calculateTotalSpent]);
 
-  const renderCategoryRow = (category: Category, level: number) => {
-    const children = getFilteredCategories(category.id);
+  const hasFilteredResults = getFilteredCategories(null).length > 0;
+
+  const renderCategory = (category: Category, level: number) => {
+    const children = getChildCategories(category.id);
     const isExpanded = expandedRows.has(category.id);
     const hasChildren = children.length > 0;
     const isSum = category.name.toLowerCase().includes('summe');
@@ -128,6 +139,7 @@ export function CostsSummary({
       ${isSum ? 'bg-yellow-100 font-bold' : ''}
       ${level === 0 ? 'bg-orange-100' : ''}
       ${category.name.includes('incl. PP') ? 'bg-green-100' : ''}
+      ${category.color ? `bg-[${category.color}]` : ''}
       hover:bg-gray-50
     `;
 
@@ -135,19 +147,19 @@ export function CostsSummary({
       <React.Fragment key={category.id}>
         <tr className={rowStyles}>
           <td className="px-4 py-2">
-            <div className="flex items-center" style={{ paddingLeft: `${level * 20}px` }}>
-              {hasChildren && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  className="p-0 h-6 w-6 mr-2"
-                  onClick={() => toggleExpand(category.id)}
-                >
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </Button>
-              )}
-              <span>{category.code}</span>
-            </div>
+            {hasChildren ? (
+              <ExpandableRow 
+                isExpanded={isExpanded}
+                onToggle={() => toggleExpand(category.id)}
+                level={level}
+              >
+                <span>{category.code}</span>
+              </ExpandableRow>
+            ) : (
+              <div className="flex items-center" style={{ paddingLeft: `${level * 20}px` }}>
+                <span>{category.code}</span>
+              </div>
+            )}
           </td>
           <td className="px-4 py-2">{category.name}</td>
           {years.map(year => {
@@ -182,86 +194,42 @@ export function CostsSummary({
             );
           })}
         </tr>
-        {isExpanded && children.map(child => renderCategoryRow(child, level + 1))}
+        {isExpanded && children.map(child => renderCategory(child, level + 1))}
       </React.Fragment>
     );
   };
-
-  const totalsByYear = useMemo(() => {
-    return years.reduce((acc, year) => {
-      const rootCategories = getFilteredCategories(null);
-      const yearTotals = rootCategories.reduce((totals, category) => {
-        // Skip special categories in budget totals
-        if (category.isSpecialCategory) return totals;
-        
-        const budget = calculateTotalBudget(category.id, year);
-        const spent = calculateTotalSpent(category.id, year);
-        return {
-          budget: totals.budget + budget,
-          spent: totals.spent + spent
-        };
-      }, { budget: 0, spent: 0 });
-      acc[year] = yearTotals;
-      return acc;
-    }, {} as Record<string, { budget: number, spent: number }>);
-  }, [categories, yearlyTotals, filter]);
-
-  const hasFilteredResults = getFilteredCategories(null).length > 0;
 
   return (
     <Card className="p-4">
       <div className="space-y-4">
         <div className="flex justify-between items-center mb-4">
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-              <Input
-                placeholder="Filter categories..."
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-            <Button 
-              variant="outline" 
-              onClick={() => handleSort('code')}
-              className="gap-2"
-            >
-              Sort by Code
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => handleSort('name')}
-              className="gap-2"
-            >
-              Sort by Name
-            </Button>
-          </div>
+          <FilterBar
+            filter={filter}
+            onFilterChange={setFilter}
+            onSort={key => handleSort(key as 'code' | 'name')}
+            sortFields={[
+              { key: 'code', label: 'Sort by Code' },
+              { key: 'name', label: 'Sort by Name' }
+            ]}
+            placeholder="Filter categories..."
+            className="flex-1"
+          />
   
-          <Button
-            variant="outline"
-            size="sm"
+          <ActionButton
             onClick={handleRefresh}
             disabled={isRefreshing}
-          >
-            {isRefreshing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh Data
-              </>
-            )}
-          </Button>
+            loading={isRefreshing}
+            icon={RefreshCw}
+            label="Refresh Data"
+            variant="outline"
+            size="sm"
+          />
         </div>
   
         {!hasFilteredResults && filter && (
           <Alert>
             <AlertDescription>
-              No categories found matching "{filter}"
+              No categories found matching &quot;{filter}&quot;
             </AlertDescription>
           </Alert>
         )}
@@ -269,7 +237,7 @@ export function CostsSummary({
         {isInspectMode && (
           <Alert>
             <AlertDescription>
-              Inspect Mode Active - Double click on any spent amount to see transaction details
+              Inspect Mode Active - Click on any spent amount to see transaction details
             </AlertDescription>
           </Alert>
         )}
@@ -291,7 +259,7 @@ export function CostsSummary({
             </thead>
             <tbody className="divide-y">
               {getFilteredCategories(null).map(category => 
-                renderCategoryRow(category, 0)
+                renderCategory(category, 0)
               )}
             </tbody>
             <tfoot className="bg-gray-100 font-bold">
@@ -326,5 +294,5 @@ export function CostsSummary({
         </div>
       </div>
     </Card>
-  )
+  );
 }

@@ -10,6 +10,13 @@ interface DatabaseSaverProps {
   onSaveComplete: (message: string) => void;
 }
 
+interface YearlyTotalCategory {
+  spent: number;
+  budget: number;
+  remaining: number;
+  transactions: Transaction[];
+}
+
 function generateTransactionId(transaction: Transaction): string {
   const docNumber = transaction.documentNumber || `NO_DOC_${Date.now()}`;
   return `${transaction.projectCode}-${transaction.year}-${docNumber}`;
@@ -43,6 +50,12 @@ function validateTransaction(transaction: Transaction): { isValid: boolean; miss
     missingFields,
     fixableFields: missingFixableFields
   };
+}
+
+interface TransactionMetadata {
+  needsReview?: boolean;
+  originalInternalCode?: string;
+  categoryCode?: string;
 }
 
 function prepareTransactionData(transaction: Transaction) {
@@ -80,7 +93,7 @@ function prepareTransactionData(transaction: Transaction) {
       needsReview: isSpecialCode, // Flag special codes for review in Missing Entries
       originalInternalCode: transaction.internalCode,
       categoryCode: categoryCode
-    }
+    } as TransactionMetadata
   };
 }
 
@@ -89,7 +102,7 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
   const { setCosts, categories } = useFinanceStore();
 
   const calculateYearlyTotals = (transactions: Transaction[]) => {
-    const yearlyTotals: Record<string, Record<string, any>> = {};
+    const yearlyTotals: Record<string, Record<string, YearlyTotalCategory>> = {};
     const years = [...new Set(transactions.map(t => t.year.toString()))];
     
     years.forEach(year => {
@@ -174,7 +187,7 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
           }
 
           successCount++;
-        } catch (error) {
+        } catch {
           errorCount++;
         }
 

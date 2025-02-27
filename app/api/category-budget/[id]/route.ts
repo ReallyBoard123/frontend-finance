@@ -1,3 +1,5 @@
+//app/api/category-budget/[id]/route.ts
+
 import { PrismaClient } from '@prisma/client';
 import { NextResponse } from 'next/server';
 
@@ -19,6 +21,7 @@ export async function PATCH(
       })
       return NextResponse.json(budget)
     } catch (error) {
+      console.error(error);
       return NextResponse.json({ error: 'Failed to update budget' }, { status: 500 })
     }
   }

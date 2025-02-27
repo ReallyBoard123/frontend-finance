@@ -1,17 +1,30 @@
-// components/budget/missing-choices.tsx
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { HelpCircle, CreditCard, FolderTree } from 'lucide-react';
+import { cn } from "@/lib/utils";
+
+export type MissingActionType = 'assign' | 'ask' | 'paid';
 
 interface MissingChoicesProps {
-  onActionSelect: (action: string) => void;
+  onActionSelect: (action: MissingActionType) => void;
   disabled?: boolean;
+  className?: string;
+  defaultValue?: MissingActionType;
 }
 
-export function MissingChoices({ onActionSelect, disabled = false }: MissingChoicesProps) {
+export function MissingChoices({
+  onActionSelect,
+  disabled = false,
+  className,
+  defaultValue
+}: MissingChoicesProps) {
   return (
-    <Select onValueChange={onActionSelect} disabled={disabled}>
-      <SelectTrigger className="w-full">
+    <Select
+      onValueChange={onActionSelect as (value: string) => void}
+      disabled={disabled}
+      defaultValue={defaultValue}
+    >
+      <SelectTrigger className={cn("w-full", className)}>
         <SelectValue placeholder={disabled ? "Inquiry Pending" : "Select action"} />
       </SelectTrigger>
       <SelectContent>

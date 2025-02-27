@@ -1,12 +1,27 @@
-interface CostCellProps {
+import React from 'react';
+import { cn } from "@/lib/utils";
+
+export interface CostCellProps {
   amount: number;
   onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void;
   isInspectMode?: boolean;
   year: number;
   categoryCode: string;
+  className?: string;
+  currencyCode?: string;
+  locale?: string;
 }
 
-export function CostCell({ amount, onCellClick, isInspectMode, year, categoryCode }: CostCellProps) {
+export function CostCell({ 
+  amount, 
+  onCellClick, 
+  isInspectMode = false, 
+  year, 
+  categoryCode,
+  className,
+  currencyCode = '€',
+  locale = 'de-DE'
+}: CostCellProps) {
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
     if (isInspectMode && onCellClick) {
       onCellClick(e, amount, year, categoryCode);
@@ -15,10 +30,14 @@ export function CostCell({ amount, onCellClick, isInspectMode, year, categoryCod
 
   return (
     <td 
-      className={`px-4 py-2 text-right ${isInspectMode ? 'hover:bg-blue-50 cursor-pointer' : ''}`}
+      className={cn(
+        "px-4 py-2 text-right",
+        isInspectMode && "hover:bg-blue-50 cursor-pointer",
+        className
+      )}
       onClick={handleClick}
     >
-      {amount.toLocaleString('de-DE')} €
+      {amount.toLocaleString(locale)} {currencyCode}
     </td>
   );
 }

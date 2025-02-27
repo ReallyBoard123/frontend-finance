@@ -1,28 +1,61 @@
 import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useFinanceStore } from '@/lib/store';
+import { useTransactionOperations } from '@/lib/hooks/useTransactionOperations';
 import { AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { CostsSummary } from './costs-summary';
-import { TransactionList } from './transaction-list';
-import { InspectMode } from './inspect-mode';
-import { CostVerification } from './cost-verification';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UploadControls } from './upload-controls';
+
 import type { ProcessedData, Transaction, TransactionUpdate } from '@/types/transactions';
-import { DatabaseSaver } from '../database/database-saver';
+import { CostsTabs } from './costs-tabs';
 import { Category } from '@/types/budget';
-import { MissingEntriesList } from './missing-enteries/missing-entries';
-import { InquiryList } from '../budget/inquiry-list';
-import { DbExport } from '../database/db-export';
-import { SpecialCategorySummary } from '../budget/special-categories-summary';
+
+interface TransactionRow {
+  'Jahr': string | number;
+  'Betrag': string | number;
+  'Konto (KoArt)'?: string;
+  'Buchungsart (Art)'?: string;
+  'Projekt (KTR)'?: string;
+  'BelegNr (BelegNr)'?: string;
+  'Bezeichnung (Konto_Bez)'?: string;
+  'Kontengruppe (KoArt_GR)'?: string;
+  'BuchDat (Buch_Dat)'?: string | Date;
+  'Erstellungsdatum'?: string | Date;
+  'Grund1 (Grund1)'?: string;
+  'Grund2 (Grund2)'?: string;
+  'RechDat (Rech_dat)'?: string | Date;
+  'RechNr (Rech_Nr)'?: string;
+  'Zahlungspartner (Zahlungsp)'?: string;
+  'koa (koa)'?: string;
+  'koa-Bezeichnung (koa_Bez)'?: string;
+  [key: string]: unknown;
+}
+
+interface YearlyTotalCategory {
+  spent: number;
+  budget: number;
+  remaining: number;
+  transactions: Transaction[];
+  isSpecialCategory: boolean;
+}
+
+type YearlyTotalRecord = Record<string, Record<string, YearlyTotalCategory>>;
 
 export function CostsUpload() {
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isVerified, setIsVerified] = useState(false);
-  const { categories, setCosts, setInquiries } = useFinanceStore();
+  
+  const { 
+    categories, 
+    setCosts, 
+    setInquiries 
+  } = useFinanceStore();
+  
+  const { 
+    calculateYearlyTotals 
+  } = useTransactionOperations();
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -41,28 +74,28 @@ export function CostsUpload() {
   
         setInquiries(inquiries);
 
-      const regularTransactions = regular.transactions || [];
-      const specialTransactions = special.transactions || [];
+        const regularTransactions = regular.transactions || [];
+        const specialTransactions = special.transactions || [];
 
-      if (regularTransactions.length || specialTransactions.length) {
-        const data = {
-          transactions: regularTransactions,
-          specialTransactions: specialTransactions,
-          yearlyTotals: calculateYearlyTotals(regularTransactions, categories)
-        };
-        setProcessedData(data);
-        setCosts(data);
-        setIsVerified(true);
-        setUploadStatus('Loaded existing transactions from database');
+        if (regularTransactions.length || specialTransactions.length) {
+          const data = {
+            transactions: regularTransactions,
+            specialTransactions: specialTransactions,
+            yearlyTotals: calculateYearlyTotals(regularTransactions, categories)
+          };
+          setProcessedData(data);
+          setCosts(data);
+          setIsVerified(true);
+          setUploadStatus('Loaded existing transactions from database');
+        }
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+        setUploadStatus('Error loading saved transactions');
       }
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      setUploadStatus('Error loading saved transactions');
-    }
-  };
+    };
 
-  fetchTransactions();
-}, [categories, setCosts, setInquiries]);
+    fetchTransactions();
+  }, [categories, setCosts, setInquiries, calculateYearlyTotals]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -79,7 +112,7 @@ export function CostsUpload() {
       
       const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { 
         raw: true 
-      });
+      }) as TransactionRow[];
       
       const data = processTransactions(rows, categories);
       setProcessedData(data);
@@ -96,7 +129,7 @@ export function CostsUpload() {
   };
 
   const handleVerificationComplete = (isValid: boolean, message: string) => {
-    setIsVerified(true);
+    setIsVerified(isValid);
     setUploadStatus(message);
   };
 
@@ -143,25 +176,14 @@ export function CostsUpload() {
         <CardTitle>Upload Transactions</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-      <div className="flex items-center gap-4">
-        <Input
-          type="file"
-          accept=".xlsx,.xls"
-          onChange={handleFileUpload}
-          className="w-64"
-        />
-        <CostVerification 
+        <UploadControls 
+          onFileUpload={handleFileUpload}
           processedData={processedData}
           categories={categories}
-          onVerificationComplete={handleVerificationComplete}
-        />
-        <DatabaseSaver 
-          processedData={processedData}
           isVerified={isVerified}
+          onVerificationComplete={handleVerificationComplete}
           onSaveComplete={handleSaveComplete}
         />
-        <DbExport hasData={processedData !== null} />
-      </div>
 
         {uploadStatus && (
           <Alert>
@@ -172,58 +194,11 @@ export function CostsUpload() {
 
         {processedData && (
           <div className="mt-4">
-            <Tabs defaultValue="summary" className="w-full">
-              <TabsList>
-                <TabsTrigger value="summary">Summary</TabsTrigger>
-                <TabsTrigger value="details">Transaction Details</TabsTrigger>
-                <TabsTrigger value="special">Special Transactions</TabsTrigger>
-                <TabsTrigger value="missing">Missing Entries</TabsTrigger>
-                <TabsTrigger value="inquiries">Ask Gerlind</TabsTrigger>
-              </TabsList>
-
-<TabsContent value="summary">
-  <InspectMode transactions={processedData.transactions}>
-    <CostsSummary 
-      categories={categories}
-      yearlyTotals={processedData.yearlyTotals}
-    />
-    <div className="mt-6">
-      <SpecialCategorySummary
-        transactions={[...processedData.transactions, ...processedData.specialTransactions]}
-        categories={categories}
-        years={["2023", "2024", "2025"]}
-      />
-    </div>
-  </InspectMode>
-</TabsContent>
-
-              <TabsContent value="details">
-                <TransactionList 
-                  initialTransactions={processedData?.transactions || []}
-                  categories={categories}
-                />
-              </TabsContent>
-
-              <TabsContent value="special">
-                <TransactionList 
-                  initialTransactions={processedData?.specialTransactions || []}
-                  categories={categories}
-                  isSpecial={true}
-                />
-              </TabsContent>
-
-              <TabsContent value="missing">
-                <MissingEntriesList
-                  transactions={processedData.transactions}
-                  categories={categories}
-                  onTransactionUpdate={handleTransactionUpdate}
-                />
-              </TabsContent>
-
-              <TabsContent value="inquiries">
-                <InquiryList />
-              </TabsContent>
-            </Tabs>
+            <CostsTabs 
+              processedData={processedData}
+              categories={categories}
+              onTransactionUpdate={handleTransactionUpdate}
+            />
           </div>
         )}
       </CardContent>
@@ -231,8 +206,8 @@ export function CostsUpload() {
   );
 }
 
-function calculateYearlyTotals(transactions: Transaction[], categories: Category[]) {
-  const yearlyTotals: Record<string, Record<string, any>> = {};
+function calculateYearlyTotals(transactions: Transaction[], categories: Category[]): YearlyTotalRecord {
+  const yearlyTotals: YearlyTotalRecord = {};
   const years = [...new Set(transactions.map(t => t.year.toString()))];
   
   years.forEach(year => {
@@ -275,10 +250,10 @@ function calculateYearlyTotals(transactions: Transaction[], categories: Category
   return yearlyTotals;
 }
 
-function processTransactions(rows: any[], categories: Category[]): ProcessedData {
+function processTransactions(rows: TransactionRow[], categories: Category[]): ProcessedData {
   const transactions = rows
-    .filter((row: any) => row['Jahr'] && row['Betrag'])
-    .map((row: any) => {
+    .filter((row) => row['Jahr'] && row['Betrag'])
+    .map((row) => {
       const internalCode = row['Konto (KoArt)']?.toString() || '';
       const transactionType = row['Buchungsart (Art)'];
       
@@ -308,21 +283,21 @@ function processTransactions(rows: any[], categories: Category[]): ProcessedData
       const transaction: Transaction = {
         id: `${row['Projekt (KTR)']}-${row['Jahr']}-${row['BelegNr (BelegNr)']}`,
         projectCode: row['Projekt (KTR)']?.toString() || '',
-        year: parseInt(row['Jahr']),
-        amount: parseFloat(row['Betrag']),
+        year: parseInt(row['Jahr'].toString()),
+        amount: parseFloat(row['Betrag'].toString()),
         internalCode,
-        description: row['Bezeichnung (Konto_Bez)'] || '',
-        costGroup: row['Kontengruppe (KoArt_GR)'] || '',
-        transactionType: transactionType || '',
+        description: row['Bezeichnung (Konto_Bez)']?.toString() || '',
+        costGroup: row['Kontengruppe (KoArt_GR)']?.toString() || '',
+        transactionType: transactionType?.toString() || '',
         documentNumber: row['BelegNr (BelegNr)']?.toString() || '',
-        bookingDate: new Date(row['BuchDat (Buch_Dat)'] || row['Erstellungsdatum']),
-        personReference: row['Grund1 (Grund1)'] || '',
-        details: row['Grund2 (Grund2)'] || '',
+        bookingDate: new Date(row['BuchDat (Buch_Dat)'] || row['Erstellungsdatum'] || new Date()),
+        personReference: row['Grund1 (Grund1)']?.toString() || '',
+        details: row['Grund2 (Grund2)']?.toString() || '',
         invoiceDate: row['RechDat (Rech_dat)'] ? new Date(row['RechDat (Rech_dat)']) : null,
-        invoiceNumber: row['RechNr (Rech_Nr)'] || '',
-        paymentPartner: row['Zahlungspartner (Zahlungsp)'] || '',
+        invoiceNumber: row['RechNr (Rech_Nr)']?.toString() || '',
+        paymentPartner: row['Zahlungspartner (Zahlungsp)']?.toString() || '',
         internalAccount: row['koa (koa)']?.toString() || '',
-        accountLabel: row['koa-Bezeichnung (koa_Bez)'] || '',
+        accountLabel: row['koa-Bezeichnung (koa_Bez)']?.toString() || '',
         categoryId: matchingCategory?.id || '',
         categoryCode: matchingCategory?.code,
         categoryName: matchingCategory?.name,

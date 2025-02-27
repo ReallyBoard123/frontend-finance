@@ -7,40 +7,94 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import type { Transaction as TransactionType } from '@/types/transactions';
+import { useTransactionOperations } from '@/lib/hooks/useTransactionOperations';
+import { formatDate } from '@/lib/utils';
+import type { Transaction } from '@/types/transactions';
 
-type Transaction = TransactionType;
+// Transaction Summary component
+function TransactionSummary({ 
+  groupedTransactions 
+}: { 
+  groupedTransactions: Record<string, { transactions: Transaction[], total: number }> 
+}) {
+  return (
+    <Accordion type="single" collapsible className="w-full">
+      {Object.entries(groupedTransactions).map(([reference, data]) => (
+        <AccordionItem key={reference} value={reference}>
+          <AccordionTrigger className="grid grid-cols-3 w-full px-4">
+            <span>{reference}</span>
+            <span>{data.transactions.length} transactions</span>
+            <span className="text-right">{data.total.toLocaleString('de-DE')} €</span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <TransactionTable transactions={data.transactions} />
+          </AccordionContent>
+        </AccordionItem>
+      ))}
+    </Accordion>
+  );
+}
 
-interface TransactionDetailsProps {
+// TransactionTable component
+function TransactionTable({ transactions }: { transactions: Transaction[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full table-auto">
+        <thead>
+          <tr className="bg-gray-50">
+            <th className="px-4 py-2 text-left">Date</th>
+            <th className="px-4 py-2 text-left">Amount</th>
+            <th className="px-4 py-2 text-left">Details</th>
+            <th className="px-4 py-2 text-left">Document</th>
+          </tr>
+        </thead>
+        <tbody>
+          {transactions.map((transaction, idx) => (
+            <tr key={idx} className="border-t">
+              <td className="px-4 py-2">{formatDate(transaction.bookingDate)}</td>
+              <td className="px-4 py-2">{transaction.amount.toLocaleString('de-DE')} €</td>
+              <td className="px-4 py-2">{transaction.details}</td>
+              <td className="px-4 py-2">{transaction.documentNumber}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Main TransactionDetails component
+export function TransactionDetails({ 
+  transactions
+  // Keeping these parameters in the type definition but not using them in function body
+  // We can either comment them out in the actual function parameters
+  // or mark them as unused with underscore prefix
+}: {
   transactions: Transaction[];
   categoryCode: string;
   year: number;
-}
-
-export function TransactionDetails({ transactions, categoryCode, year }: TransactionDetailsProps) {
-  const [count, setCount] = useState(0);
+}) {
+  const [transactionCount, setTransactionCount] = useState(0);
+  const { isLoading } = useTransactionOperations();
 
   useEffect(() => {
-    const fetchTransactionCount = async () => {
+    const fetchCount = async () => {
       try {
         const response = await fetch('/api/transactions');
         const data = await response.json();
-        setCount(data.count);
+        setTransactionCount(data.count || 0);
       } catch (error) {
         console.error('Error fetching transaction count:', error);
       }
     };
     
-    fetchTransactionCount();
+    fetchCount();
   }, []);
 
   const groupedTransactions = transactions.reduce((acc, transaction) => {
     const key = transaction.personReference || 'Unknown';
     if (!acc[key]) {
-      acc[key] = {
-        transactions: [],
-        total: 0
-      };
+      acc[key] = { transactions: [], total: 0 };
     }
     acc[key].transactions.push(transaction);
     acc[key].total += transaction.amount;
@@ -51,7 +105,7 @@ export function TransactionDetails({ transactions, categoryCode, year }: Transac
     <div className="space-y-4">
       <Alert>
         <AlertDescription>
-          Loaded {count} transactions from database
+          {isLoading ? 'Loading transactions...' : `Loaded ${transactionCount} transactions from database`}
         </AlertDescription>
       </Alert>
 
@@ -64,45 +118,7 @@ export function TransactionDetails({ transactions, categoryCode, year }: Transac
         </TabsList>
 
         <TabsContent value="summary">
-          <Accordion type="single" collapsible className="w-full">
-            {Object.entries(groupedTransactions).map(([reference, data]) => (
-              <AccordionItem key={reference} value={reference}>
-                <AccordionTrigger className="grid grid-cols-3 w-full px-4">
-                  <span>{reference}</span>
-                  <span>{data.transactions.length} transactions</span>
-                  <span className="text-right">{data.total.toLocaleString('de-DE')} €</span>
-                </AccordionTrigger>
-                <AccordionContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full table-auto">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="px-4 py-2 text-left">Date</th>
-                          <th className="px-4 py-2 text-left">Amount</th>
-                          <th className="px-4 py-2 text-left">Details</th>
-                          <th className="px-4 py-2 text-left">Document</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.transactions.map((transaction, idx) => (
-                          <tr key={idx} className="border-t">
-                            <td className="px-4 py-2">
-                              {new Date(transaction.bookingDate).toLocaleDateString('de-DE')}
-                            </td>
-                            <td className="px-4 py-2">
-                              {transaction.amount.toLocaleString('de-DE')} €
-                            </td>
-                            <td className="px-4 py-2">{transaction.details}</td>
-                            <td className="px-4 py-2">{transaction.documentNumber}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
+          <TransactionSummary groupedTransactions={groupedTransactions} />
         </TabsContent>
 
         {Object.entries(groupedTransactions).map(([reference, data]) => (
@@ -114,32 +130,7 @@ export function TransactionDetails({ transactions, categoryCode, year }: Transac
                   Total: {data.total.toLocaleString('de-DE')} €
                 </span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full table-auto">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="px-4 py-2 text-left">Date</th>
-                      <th className="px-4 py-2 text-left">Amount</th>
-                      <th className="px-4 py-2 text-left">Details</th>
-                      <th className="px-4 py-2 text-left">Document</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {data.transactions.map((transaction, idx) => (
-                      <tr key={idx} className="border-t">
-                        <td className="px-4 py-2">
-                          {new Date(transaction.bookingDate).toLocaleDateString('de-DE')}
-                        </td>
-                        <td className="px-4 py-2">
-                          {transaction.amount.toLocaleString('de-DE')} €
-                        </td>
-                        <td className="px-4 py-2">{transaction.details}</td>
-                        <td className="px-4 py-2">{transaction.documentNumber}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <TransactionTable transactions={data.transactions} />
             </div>
           </TabsContent>
         ))}

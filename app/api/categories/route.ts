@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { z } from 'zod'
-import type { Category } from '@/types/budget'
+
 
 const categorySchema = z.object({
   code: z.string().regex(/^F\d{4}$/, "Must be in format F#### (e.g., F0861)"),
@@ -14,7 +14,6 @@ const categorySchema = z.object({
   categoryType: z.string().optional()
 })
 
-type CategoryInput = z.infer<typeof categorySchema>
 
 export async function GET() {
   try {
@@ -31,7 +30,7 @@ export async function GET() {
     }))
 
     return NextResponse.json(formattedCategories)
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: 'Failed to fetch categories' }, 
       { status: 500 }

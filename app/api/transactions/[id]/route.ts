@@ -33,7 +33,7 @@ export async function PATCH(
 
     // Save metadata with previous state and additional fields if provided
     const metadata = {
-      ...(existingTransaction.metadata as any || {}),
+      ...(existingTransaction.metadata as Record<string, unknown> || {}),
       previousState: data.previousState || {},
       categoryCode: data.categoryCode,
       categoryName: data.categoryName,
@@ -53,7 +53,7 @@ export async function PATCH(
 
     // Create a log entry for this change
     if ((data.categoryId !== existingTransaction.categoryId) || 
-        (data.categoryCode && (existingTransaction.metadata as any)?.categoryCode !== data.categoryCode)) {
+        (data.categoryCode && (existingTransaction.metadata as Record<string, unknown>)?.categoryCode !== data.categoryCode)) {
       await prisma.transactionLog.create({
         data: {
           transactionId: id,
@@ -64,7 +64,7 @@ export async function PATCH(
             categoryCode: data.categoryCode,
             categoryName: data.categoryName
           },
-          note: `Category changed from ${(existingTransaction.metadata as any)?.categoryCode || 'unassigned'} to ${data.categoryCode}`,
+          note: `Category changed from ${(existingTransaction.metadata as Record<string, unknown>)?.categoryCode || 'unassigned'} to ${data.categoryCode}`,
           performedBy: 'user'
         }
       });

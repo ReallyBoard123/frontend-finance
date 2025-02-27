@@ -1,3 +1,5 @@
+//app/api/category-budget/route.ts
+
 import { PrismaClient } from '@prisma/client';
 import { NextResponse } from 'next/server';
 
@@ -8,7 +10,7 @@ export async function POST(req: Request) {
       const data = await req.json()
       const budget = await prisma.categoryBudget.create({ data })
       return NextResponse.json(budget)
-    } catch (error) {
+    } catch {
       return NextResponse.json({ error: 'Failed to create budget' }, { status: 500 })
     }
   }
@@ -18,7 +20,7 @@ export async function POST(req: Request) {
     const year = searchParams.get('year')
   
     try {
-      const where: any = {}
+      const where: { year?: number } = {}
       if (year) where.year = parseInt(year)
   
       const budgets = await prisma.categoryBudget.findMany({
@@ -28,7 +30,7 @@ export async function POST(req: Request) {
         }
       })
       return NextResponse.json(budgets)
-    } catch (error) {
+    } catch {
       return NextResponse.json({ error: 'Failed to fetch budgets' }, { status: 500 })
     }
   }

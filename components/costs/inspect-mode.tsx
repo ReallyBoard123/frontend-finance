@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-
-import type { Transaction } from '@/types/transactions';
 import { TransactionDetails } from './tabbed-transaction';
+import type { Transaction } from '@/types/transactions';
 
 interface InspectModeProps {
   children: React.ReactNode;
   transactions: Transaction[];
+  title?: string;
 }
 
-export function InspectMode({ children, transactions }: InspectModeProps) {
+export function InspectMode({ 
+  children, 
+  transactions,
+  title = "Inspect Mode" 
+}: InspectModeProps) {
   const [isInspectMode, setIsInspectMode] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<{
     amount: number;
@@ -25,11 +29,16 @@ export function InspectMode({ children, transactions }: InspectModeProps) {
   };
 
   const matchingTransactions = selectedAmount ? 
-    transactions.filter(t => t.year === selectedAmount.year && t.categoryCode === selectedAmount.categoryCode) : 
-    [];
+    transactions.filter(t => 
+      t.year === selectedAmount.year && 
+      t.categoryCode === selectedAmount.categoryCode
+    ) : [];
 
   const childrenWithProps = React.Children.map(children, child => {
-    if (React.isValidElement<{ onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void; isInspectMode?: boolean }>(child)) {
+    if (React.isValidElement<{ 
+      onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void; 
+      isInspectMode?: boolean 
+    }>(child)) {
       return React.cloneElement(child, {
         onCellClick: handleCellClick,
         isInspectMode,
@@ -46,7 +55,9 @@ export function InspectMode({ children, transactions }: InspectModeProps) {
           checked={isInspectMode} 
           onCheckedChange={(checked) => setIsInspectMode(checked as boolean)}
         />
-        <label htmlFor="inspect-mode">Inspect Mode</label>
+        <label htmlFor="inspect-mode" className="text-sm font-medium">
+          {title}
+        </label>
       </div>
 
       <div className={isInspectMode ? 'cursor-pointer' : ''}>

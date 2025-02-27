@@ -13,9 +13,10 @@ const updateCategorySchema = z.object({
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
+    const params = await context.params
     const data = await request.json()
     const validatedData = updateCategorySchema.parse(data)
 

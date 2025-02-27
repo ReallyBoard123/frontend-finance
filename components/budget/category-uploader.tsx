@@ -1,14 +1,16 @@
+// components/budget/category-uploader.tsx
 import React, { useState } from 'react';
-import { useFinanceStore } from '@/lib/store';
 import * as XLSX from 'xlsx';
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Upload, Save, Loader2, AlertTriangle } from 'lucide-react';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { FileUploader } from "@/components/common/ui/file-uploader";
+import { ActionButton } from "@/components/common/ui/action-button";
+import { DataTable } from "@/components/common/data-table/data-table";
+import { Save, AlertTriangle } from 'lucide-react';
+import { useCategoryOperations } from '@/lib/hooks/useCategoryOperations';
 
 interface ProcessedCategory {
+  id: string;
   code: string;
   name: string;
   parentId: string | null;
@@ -21,18 +23,32 @@ interface ProcessedCategory {
     expectedTotal: Record<string, number>;
     calculatedTotal: Record<string, number>;
   };
-  
+}
+
+interface CategoryRow {
+  category_code: string;
+  name: string;
+  parent_code?: string;
+  [key: string]: unknown;
+}
+
+interface SavedCategory {
+  id: string;
+  code: string;
+  name: string;
+  parentId: string | null;
+  budgets: Record<string, number>;
+  isLeaf: boolean;
+  [key: string]: unknown;
 }
 
 export function CategoryUploader() {
   const [uploadStatus, setUploadStatus] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [processedCategories, setProcessedCategories] = useState<ProcessedCategory[]>([]);
   const [hasDiscrepancies, setHasDiscrepancies] = useState(false);
-  const { setCategories } = useFinanceStore();
+  const { isLoading, setCategories } = useCategoryOperations();
 
   const validateParentTotals = (categories: ProcessedCategory[]): ProcessedCategory[] => {
-    const categoryMap = new Map(categories.map(cat => [cat.code, cat]));
     const years = ["2023", "2024", "2025"];
     
     // Create a map of parent codes to their children
@@ -77,39 +93,30 @@ export function CategoryUploader() {
     return validatedCategories;
   };
 
-  const processCategories = (rows: any[]): ProcessedCategory[] => {
-    const categories = rows.map(row => ({
+  const processCategories = (rows: CategoryRow[]): ProcessedCategory[] => {
+    const categories = rows.map((row, index) => ({
+      id: `temp-${index}`, // Add temporary id
       code: row.category_code,
       name: row.name,
       parentId: null,
       parent_code: row.parent_code || null,
       budgets: {
-        "2023": parseFloat(row["2023"]) || 0,
-        "2024": parseFloat(row["2024"]) || 0,
-        "2025": parseFloat(row["2025"]) || 0
+        "2023": parseFloat(row["2023"] as string) || 0,
+        "2024": parseFloat(row["2024"] as string) || 0,
+        "2025": parseFloat(row["2025"] as string) || 0
       },
       isLeaf: !row.name.toLowerCase().includes('summe')
     }));
-
+  
     return validateParentTotals(categories);
   };
 
-  const formatNumber = (num: number) => {
-    return num.toLocaleString('de-DE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-  };
-
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const handleFileSelect = async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(worksheet);
+      const rows = XLSX.utils.sheet_to_json(worksheet) as CategoryRow[];
 
       const categories = processCategories(rows);
       setProcessedCategories(categories);
@@ -126,8 +133,7 @@ export function CategoryUploader() {
       return;
     }
     
-    setIsLoading(true);
-    const categoryMap = new Map<string, any>();
+    const categoryMap = new Map<string, SavedCategory>();
 
     try {
       // First pass: Create all categories
@@ -148,7 +154,7 @@ export function CategoryUploader() {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
-        const savedCategory = await response.json();
+        const savedCategory = await response.json() as SavedCategory;
         categoryMap.set(category.code, savedCategory);
       }
 
@@ -171,7 +177,7 @@ export function CategoryUploader() {
               throw new Error(`HTTP error! status: ${response.status}`);
             }
 
-            const updatedCategory = await response.json();
+            const updatedCategory = await response.json() as SavedCategory;
             categoryMap.set(category.code, updatedCategory);
           }
         }
@@ -184,10 +190,59 @@ export function CategoryUploader() {
     } catch (error) {
       console.error('Error saving categories:', error);
       setUploadStatus('Error saving categories: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setIsLoading(false);
     }
   };
+
+  const columns = [
+    {
+      key: 'code',
+      header: 'Code',
+      cell: (category: ProcessedCategory) => category.code
+    },
+    {
+      key: 'name',
+      header: 'Name',
+      cell: (category: ProcessedCategory) => category.name
+    },
+    {
+      key: 'parent',
+      header: 'Parent',
+      cell: (category: ProcessedCategory) => category.parent_code || '-'
+    },
+    {
+      key: 'isLeaf',
+      header: 'Is Leaf',
+      cell: (category: ProcessedCategory) => category.isLeaf ? 'Yes' : 'No'
+    },
+    {
+      key: '2023',
+      header: '2023',
+      cell: (category: ProcessedCategory) => 
+        new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2 }).format(category.budgets["2023"])
+    },
+    {
+      key: '2024',
+      header: '2024',
+      cell: (category: ProcessedCategory) => 
+        new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2 }).format(category.budgets["2024"])
+    },
+    {
+      key: '2025',
+      header: '2025',
+      cell: (category: ProcessedCategory) =>
+        new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2 }).format(category.budgets["2025"])
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      cell: (category: ProcessedCategory) => category.validation?.hasDiscrepancy ? (
+        <div className="flex items-center text-red-600">
+          <AlertTriangle className="h-4 w-4 mr-2" />
+          Sum mismatch
+        </div>
+      ) : null
+    }
+  ];
 
   return (
     <Card>
@@ -196,24 +251,20 @@ export function CategoryUploader() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-4">
-          <Input
-            type="file"
+          <FileUploader
+            onFileSelect={handleFileSelect}
             accept=".xlsx,.xls"
-            onChange={handleFileUpload}
+            label="Upload Categories"
             className="w-64"
           />
-          <Button 
-            variant="outline"
+          <ActionButton 
             onClick={handleSave}
             disabled={processedCategories.length === 0 || isLoading || hasDiscrepancies}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-2" />
-            )}
-            Save Categories
-          </Button>
+            loading={isLoading}
+            icon={Save}
+            label="Save Categories"
+            variant="outline"
+          />
         </div>
 
         {uploadStatus && (
@@ -225,46 +276,12 @@ export function CategoryUploader() {
         {processedCategories.length > 0 && (
           <div className="mt-6">
             <h3 className="text-lg font-medium mb-4">Preview ({processedCategories.length} categories)</h3>
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Parent</TableHead>
-                    <TableHead>Is Leaf</TableHead>
-                    <TableHead className="text-right">2023</TableHead>
-                    <TableHead className="text-right">2024</TableHead>
-                    <TableHead className="text-right">2025</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {processedCategories.map((category) => (
-                    <TableRow 
-                      key={category.code}
-                      className={category.validation?.hasDiscrepancy ? 'bg-red-50' : ''}
-                    >
-                      <TableCell>{category.code}</TableCell>
-                      <TableCell>{category.name}</TableCell>
-                      <TableCell>{category.parent_code || '-'}</TableCell>
-                      <TableCell>{category.isLeaf ? 'Yes' : 'No'}</TableCell>
-                      <TableCell className="text-right">{formatNumber(category.budgets["2023"])}</TableCell>
-                      <TableCell className="text-right">{formatNumber(category.budgets["2024"])}</TableCell>
-                      <TableCell className="text-right">{formatNumber(category.budgets["2025"])}</TableCell>
-                      <TableCell>
-                        {category.validation?.hasDiscrepancy && (
-                          <div className="flex items-center text-red-600">
-                            <AlertTriangle className="h-4 w-4 mr-2" />
-                            Sum mismatch
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <DataTable
+              data={processedCategories}
+              columns={columns}
+              rowClassName={(category) => category.validation?.hasDiscrepancy ? 'bg-red-50' : ''}
+              emptyMessage="No categories to display"
+            />
           </div>
         )}
       </CardContent>
