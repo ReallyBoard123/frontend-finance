@@ -32,20 +32,11 @@ interface TransactionRow {
   [key: string]: unknown;
 }
 
-interface YearlyTotalCategory {
-  spent: number;
-  budget: number;
-  remaining: number;
-  transactions: Transaction[];
-  isSpecialCategory: boolean;
-}
-
-type YearlyTotalRecord = Record<string, Record<string, YearlyTotalCategory>>;
-
 export function CostsUpload() {
   const [processedData, setProcessedData] = useState<ProcessedData | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isVerified, setIsVerified] = useState(false);
+  const [initialFetchDone, setInitialFetchDone] = useState(false);
   
   const { 
     categories, 
@@ -59,6 +50,9 @@ export function CostsUpload() {
 
   useEffect(() => {
     const fetchTransactions = async () => {
+      // Prevent multiple fetches
+      if (initialFetchDone) return;
+
       try {
         const [regularRes, specialRes, inquiriesRes] = await Promise.all([
           fetch('/api/transactions?type=regular'),
@@ -88,14 +82,19 @@ export function CostsUpload() {
           setIsVerified(true);
           setUploadStatus('Loaded existing transactions from database');
         }
+
+        // Mark initial fetch as complete
+        setInitialFetchDone(true);
       } catch (error) {
         console.error('Error fetching transactions:', error);
         setUploadStatus('Error loading saved transactions');
+        // Even if there's an error, mark initial fetch as complete
+        setInitialFetchDone(true);
       }
     };
 
     fetchTransactions();
-  }, [categories, setCosts, setInquiries, calculateYearlyTotals]);
+  }, [categories, setCosts, setInquiries, calculateYearlyTotals, initialFetchDone]);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -206,50 +205,6 @@ export function CostsUpload() {
   );
 }
 
-function calculateYearlyTotals(transactions: Transaction[], categories: Category[]): YearlyTotalRecord {
-  const yearlyTotals: YearlyTotalRecord = {};
-  const years = [...new Set(transactions.map(t => t.year.toString()))];
-  
-  years.forEach(year => {
-    yearlyTotals[year] = {};
-    // Include ALL categories in the yearly totals for tracking
-    categories.forEach(category => {
-      yearlyTotals[year][category.code] = {
-        spent: 0,
-        budget: category.budgets?.[year] || 0,
-        remaining: category.budgets?.[year] || 0,
-        transactions: [],
-        isSpecialCategory: category.isSpecialCategory || false
-      };
-    });
-  });
-
-  transactions.forEach(transaction => {
-    const year = transaction.year.toString();
-    const categoryCode = transaction.categoryCode;
-    if (!categoryCode) return;
-    
-    if (yearlyTotals[year][categoryCode]) {
-      yearlyTotals[year][categoryCode].spent += transaction.amount;
-      yearlyTotals[year][categoryCode].remaining = 
-        yearlyTotals[year][categoryCode].budget - yearlyTotals[year][categoryCode].spent;
-      yearlyTotals[year][categoryCode].transactions.push(transaction);
-    }
-
-    const category = categories.find(c => c.code === categoryCode);
-    if (!category) return;
-
-    const parentCategory = categories.find(c => c.id === category.parentId);
-    if (parentCategory && yearlyTotals[year][parentCategory.code]) {
-      yearlyTotals[year][parentCategory.code].spent += transaction.amount;
-      yearlyTotals[year][parentCategory.code].remaining = 
-        yearlyTotals[year][parentCategory.code].budget - yearlyTotals[year][parentCategory.code].spent;
-    }
-  });
-
-  return yearlyTotals;
-}
-
 function processTransactions(rows: TransactionRow[], categories: Category[]): ProcessedData {
   const transactions = rows
     .filter((row) => row['Jahr'] && row['Betrag'])
@@ -257,20 +212,10 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
       const internalCode = row['Konto (KoArt)']?.toString() || '';
       const transactionType = row['Buchungsart (Art)'];
       
-      // Debug logging to check what's causing the special transaction classification
-      console.log('Processing transaction:', {
-        id: `${row['Projekt (KTR)']}-${row['Jahr']}-${row['BelegNr (BelegNr)']}`,
-        transactionType,
-        internalCode,
-        description: row['Bezeichnung (Konto_Bez)']
-      });
-      
       // More explicit special handling check
       const requiresSpecialHandling = 
         (transactionType === 'IVMC-Hochr.') || 
         (internalCode === '23152');
-      
-      console.log(`Transaction requires special handling: ${requiresSpecialHandling}`);
 
       const internalCodeNum = internalCode.padStart(4, '0');
       const categoryCode = `F${internalCodeNum}`;
@@ -310,22 +255,58 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
       return transaction;
     });
 
-  // Filter special transactions with clear logging
-  const specialTransactions = transactions.filter(t => {
-    console.log(`Checking special handling for ${t.id}: ${t.requiresSpecialHandling}`);
-    return t.requiresSpecialHandling;
-  });
+  // Filter special transactions 
+  const specialTransactions = transactions.filter(t => t.requiresSpecialHandling);
   const regularTransactions = transactions.filter(t => !t.requiresSpecialHandling);
   
-  console.log(`Total transactions: ${transactions.length}`);
-  console.log(`Regular transactions: ${regularTransactions.length}`);
-  console.log(`Special transactions: ${specialTransactions.length}`);
-  
-  const yearlyTotals = calculateYearlyTotals(regularTransactions, categories);
+  const yearlyTotals = processTransactionTotals(regularTransactions, categories);
 
   return { 
     transactions: regularTransactions, 
     yearlyTotals, 
     specialTransactions 
   };
+}
+
+function processTransactionTotals(transactions: Transaction[], categories: Category[]) {
+  const yearlyTotals: Record<string, Record<string, any>> = {};
+  const years = [...new Set(transactions.map(t => t.year.toString()))];
+  
+  years.forEach(year => {
+    yearlyTotals[year] = {};
+    categories.forEach(category => {
+      yearlyTotals[year][category.code] = {
+        spent: 0,
+        budget: category.budgets?.[year] || 0,
+        remaining: category.budgets?.[year] || 0,
+        transactions: [],
+        isSpecialCategory: category.isSpecialCategory || false
+      };
+    });
+  });
+
+  transactions.forEach(transaction => {
+    const year = transaction.year.toString();
+    const categoryCode = transaction.categoryCode;
+    if (!categoryCode) return;
+    
+    if (yearlyTotals[year][categoryCode]) {
+      yearlyTotals[year][categoryCode].spent += transaction.amount;
+      yearlyTotals[year][categoryCode].remaining = 
+        yearlyTotals[year][categoryCode].budget - yearlyTotals[year][categoryCode].spent;
+      yearlyTotals[year][categoryCode].transactions.push(transaction);
+    }
+
+    const category = categories.find(c => c.code === categoryCode);
+    if (!category) return;
+
+    const parentCategory = categories.find(c => c.id === category.parentId);
+    if (parentCategory && yearlyTotals[year][parentCategory.code]) {
+      yearlyTotals[year][parentCategory.code].spent += transaction.amount;
+      yearlyTotals[year][parentCategory.code].remaining = 
+        yearlyTotals[year][parentCategory.code].budget - yearlyTotals[year][parentCategory.code].spent;
+    }
+  });
+
+  return yearlyTotals;
 }
