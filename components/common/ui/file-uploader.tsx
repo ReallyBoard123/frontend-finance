@@ -26,10 +26,6 @@ export function FileUploader({
 
   return (
     <div className={className}>
-      <Label className="flex items-center gap-2">
-        <Upload className="h-4 w-4" />
-        {label}
-      </Label>
       <Input
         type="file"
         accept={accept}

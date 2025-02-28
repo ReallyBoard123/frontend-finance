@@ -1,7 +1,6 @@
 // components/budget/category-uploader.tsx
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FileUploader } from "@/components/common/ui/file-uploader";
 import { ActionButton } from "@/components/common/ui/action-button";
@@ -245,46 +244,41 @@ export function CategoryUploader() {
   ];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Upload Categories</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-4">
-          <FileUploader
-            onFileSelect={handleFileSelect}
-            accept=".xlsx,.xls"
-            label="Upload Categories"
-            className="w-64"
-          />
-          <ActionButton 
-            onClick={handleSave}
-            disabled={processedCategories.length === 0 || isLoading || hasDiscrepancies}
-            loading={isLoading}
-            icon={Save}
-            label="Save Categories"
-            variant="outline"
+    <div>
+      <div className="flex items-center gap-4">
+        <FileUploader
+          onFileSelect={handleFileSelect}
+          accept=".xlsx,.xls"
+          label="Upload Categories"
+          className="w-64"
+        />
+        <ActionButton 
+          onClick={handleSave}
+          disabled={processedCategories.length === 0 || isLoading || hasDiscrepancies}
+          loading={isLoading}
+          icon={Save}
+          label="Save Categories"
+          variant="outline"
+        />
+      </div>
+
+      {uploadStatus && (
+        <Alert variant={hasDiscrepancies ? "destructive" : "default"}>
+          <AlertDescription>{uploadStatus}</AlertDescription>
+        </Alert>
+      )}
+
+      {processedCategories.length > 0 && (
+        <div className="mt-6">
+          <h3 className="text-lg font-medium mb-4">Preview ({processedCategories.length} categories)</h3>
+          <DataTable
+            data={processedCategories}
+            columns={columns}
+            rowClassName={(category) => category.validation?.hasDiscrepancy ? 'bg-red-50' : ''}
+            emptyMessage="No categories to display"
           />
         </div>
-
-        {uploadStatus && (
-          <Alert variant={hasDiscrepancies ? "destructive" : "default"}>
-            <AlertDescription>{uploadStatus}</AlertDescription>
-          </Alert>
-        )}
-
-        {processedCategories.length > 0 && (
-          <div className="mt-6">
-            <h3 className="text-lg font-medium mb-4">Preview ({processedCategories.length} categories)</h3>
-            <DataTable
-              data={processedCategories}
-              columns={columns}
-              rowClassName={(category) => category.validation?.hasDiscrepancy ? 'bg-red-50' : ''}
-              emptyMessage="No categories to display"
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }

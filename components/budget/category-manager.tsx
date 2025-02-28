@@ -25,7 +25,6 @@ export function CategoryManager() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Budget Categories</h2>
         <ActionButton 
           onClick={() => setOpen(true)} 
           icon={Plus} 
