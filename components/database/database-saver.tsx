@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Save } from 'lucide-react';
 import { useFinanceStore } from '@/lib/store';
 import type { ProcessedData, Transaction } from '@/types/transactions';
+import { isElviTransaction, isZuweisungTransaction } from '@/lib/specialCategoryUtils';
 
 interface DatabaseSaverProps {
   processedData: ProcessedData | null;
@@ -17,7 +18,14 @@ interface YearlyTotalCategory {
   transactions: Transaction[];
 }
 
-function generateTransactionId(transaction: Transaction, index: number = 0): string {
+interface TransactionMetadata {
+  needsReview?: boolean;
+  originalInternalCode?: string;
+  categoryCode?: string | null;
+  splitId?: string | null;
+}
+
+export function generateTransactionId(transaction: Transaction, index: number = 0): string {
   // Include the transaction's current ID if it already has one (which includes the index)
   if (transaction.id && transaction.id.includes('-')) {
     return transaction.id;
@@ -27,6 +35,7 @@ function generateTransactionId(transaction: Transaction, index: number = 0): str
   const docNumber = transaction.documentNumber || `NO_DOC_${Date.now()}`;
   return `${transaction.projectCode}-${transaction.year}-${docNumber}-${index}`;
 }
+
 
 function validateTransaction(transaction: Transaction): { isValid: boolean; missingFields: string[]; fixableFields: string[] } {
   const requiredFields = [
@@ -58,50 +67,49 @@ function validateTransaction(transaction: Transaction): { isValid: boolean; miss
   };
 }
 
-interface TransactionMetadata {
-  needsReview?: boolean;
-  originalInternalCode?: string;
-  categoryCode?: string;
-}
-
 function prepareTransactionData(transaction: Transaction, index: number = 0) {
-  // For special numeric codes (600, 23152), preserve them without forcing a category
-  const isSpecialCode = /^0*(600|23152)$/.test(transaction.internalCode);
+  // Normalize internal code
+  const normalizedInternalCode = transaction.internalCode.replace(/^0+/, '');
   
-  // Keep categoryId null for special codes to preserve their nature
-  const categoryId = isSpecialCode ? null : transaction.categoryId;
+  // Check if it's a special category
+  const is600 = normalizedInternalCode === '600';
+  const is23152 = normalizedInternalCode === '23152';
   
-  // For special codes, use the raw code as the display code
-  const categoryCode = isSpecialCode ? transaction.internalCode : transaction.categoryCode;
+  // Generate a safe document number that won't have undefined
+  const docNumber = transaction.documentNumber || `NODOC-${Date.now()}-${index}`;
   
+  // Generate a safe ID that won't have undefined
+  const safeId = transaction.id && !transaction.id.includes('undefined') 
+    ? transaction.id 
+    : `${transaction.projectCode}-${transaction.year}-${docNumber}-${index}`;
+    
   return {
     ...transaction,
-    id: generateTransactionId(transaction, index),
-    isSplit: false, // Set to true if you know it's a split transaction
+    id: safeId,
+    isSplit: false,
     splitIndex: index,
     internalCode: transaction.internalCode.toString().padStart(4, '0'),
     bookingDate: new Date(transaction.bookingDate).toISOString(),
     invoiceDate: transaction.invoiceDate ? new Date(transaction.invoiceDate).toISOString() : null,
     year: Number(transaction.year),
     amount: Number(transaction.amount),
-    requiresSpecialHandling: Boolean(transaction.requiresSpecialHandling),
+    requiresSpecialHandling: is23152,
     status: transaction.status || 'unprocessed',
     costGroup: transaction.costGroup || 'Unspecified',
     projectCode: transaction.projectCode.toString(),
-    documentNumber: transaction.documentNumber?.toString() || null,
+    documentNumber: docNumber,
     personReference: transaction.personReference || null,
     details: transaction.details || null,
     invoiceNumber: transaction.invoiceNumber || null,
     paymentPartner: transaction.paymentPartner || null,
     internalAccount: transaction.internalAccount || null,
     accountLabel: transaction.accountLabel || null,
-    categoryId: categoryId,
-    // Store additional metadata for future reference
+    categoryId: (is600 || is23152) ? null : transaction.categoryId,
     metadata: {
-      needsReview: isSpecialCode, // Flag special codes for review in Missing Entries
+      needsReview: is600,
       originalInternalCode: transaction.internalCode,
-      categoryCode: categoryCode
-    } as TransactionMetadata
+      categoryCode: transaction.categoryCode
+    }
   };
 }
 
@@ -267,6 +275,7 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
       onClick={handleSave} 
       disabled={!processedData || !isVerified || saving}
       variant="secondary"
+      className={`${isVerified ? 'bg-green-500 text-white hover:bg-green-700' : ''}`}
     >
       <Save className="h-4 w-4 mr-2" />
       {saving ? 'Saving...' : 'Save to Database'}

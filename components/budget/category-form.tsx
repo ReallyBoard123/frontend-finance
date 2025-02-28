@@ -8,14 +8,14 @@ import { Input } from "@/components/ui/input";
 import { CategorySelect } from "@/components/common/ui/category-select";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCategoryOperations } from '@/lib/hooks/useCategoryOperations';
+
+// Removed Select, SelectContent, SelectItem, SelectTrigger, SelectValue since we're removing the category type selection
 
 const categorySchema = z.object({
   code: z.string().regex(/^F\d{4}$/, "Must be in format F#### (e.g., F0861)"),
   name: z.string().min(1, "Name is required"),
   isSpecialCategory: z.boolean(),
-  categoryType: z.string().optional(),
   parentId: z.string().nullable(),
   budgets: z.record(z.string(), z.number().min(0, "Budget must be positive")).optional(),
   color: z.string().optional()
@@ -38,7 +38,6 @@ export function CategoryForm({ open, onOpenChange }: CategoryFormProps) {
       name: '',
       parentId: null,
       isSpecialCategory: false,
-      categoryType: undefined,
       budgets: {
         "2023": 0,
         "2024": 0,
@@ -49,20 +48,6 @@ export function CategoryForm({ open, onOpenChange }: CategoryFormProps) {
   });
   
   const isSpecialCategory = form.watch("isSpecialCategory");
-  const categoryType = form.watch("categoryType");
-
-  // Auto-fill fields for special categories
-  React.useEffect(() => {
-    if (isSpecialCategory && categoryType) {
-      if (categoryType === "ALLOCATION") {
-        form.setValue("code", "F0600");
-        form.setValue("name", "ELVI: Festlegungen");
-      } else if (categoryType === "PAYMENT") {
-        form.setValue("code", "F23152");
-        form.setValue("name", "Zuweisung für laufende Zwecke");
-      }
-    }
-  }, [isSpecialCategory, categoryType, form]);
 
   const handleSubmit = async (data: CategoryFormSchema) => {
     await addCategory(data);
@@ -94,105 +79,75 @@ export function CategoryForm({ open, onOpenChange }: CategoryFormProps) {
                 </FormControl>
                 <FormLabel>Special Category (excluded from budget totals)</FormLabel>
                 <FormDescription>
-                  Use for special types like allocations (600) or payments (23152)
+                  Use for special category types
                 </FormDescription>
               </FormItem>
             )}
           />
 
-          {isSpecialCategory && (
-            <FormField
-              control={form.control}
-              name="categoryType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category Type</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="ALLOCATION">Allocation (600)</SelectItem>
-                      <SelectItem value="PAYMENT">Payment (23152)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>Determines how transactions are processed</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+          {/* Removed the CategoryType selector that included 600 and 23152 options */}
 
-          {(!isSpecialCategory || !categoryType) && (
-            <>
-              <FormField
-                control={form.control}
-                name="code"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category Code</FormLabel>
-                    <FormControl>
-                      <Input placeholder="F0861" {...field} />
-                    </FormControl>
-                    <FormDescription>Format: F#### (e.g., F0861)</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="code"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Category Code</FormLabel>
+                <FormControl>
+                  <Input placeholder="F0861" {...field} />
+                </FormControl>
+                <FormDescription>Format: F#### (e.g., F0861)</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
               
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Gesamtausgaben" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Category Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="Gesamtausgaben" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="parentId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Parent Category</FormLabel>
-                    <FormControl>
-                      <CategorySelect 
-                        categories={categories}
-                        selectedCategoryId={field.value || ''}
-                        onSelect={field.onChange}
-                        placeholder="Select parent category"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <FormField
+            control={form.control}
+            name="parentId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Parent Category</FormLabel>
+                <FormControl>
+                  <CategorySelect 
+                    categories={categories}
+                    selectedCategoryId={field.value || ''}
+                    onSelect={field.onChange}
+                    placeholder="Select parent category"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <FormField
-                control={form.control}
-                name="color"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Row Color (optional)</FormLabel>
-                    <FormControl>
-                      <Input type="color" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </>
-          )}
+          <FormField
+            control={form.control}
+            name="color"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Row Color (optional)</FormLabel>
+                <FormControl>
+                  <Input type="color" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
           {!isSpecialCategory && [2023, 2024, 2025].map(year => (
             <FormField

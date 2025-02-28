@@ -7,7 +7,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    // FIX: Make sure to await params - this was causing the error
+    const { id } = await params;
     const data = await request.json();
     
     // Retrieve existing transaction
@@ -26,9 +27,15 @@ export async function PATCH(
     let categoryId = data.categoryId;
     const categoryCode = data.categoryCode;
     
-    if (categoryCode && /^0*(600|23152)$/.test(categoryCode)) {
-      // For special codes, set categoryId to null but preserve the code in metadata
-      categoryId = null;
+    // Normalize internal code and check if it's a special category
+    const internalCode = existingTransaction.internalCode.replace(/^0+/, '');
+    const isSpecialCategory = internalCode === '600' || internalCode === '23152';
+    
+    // For special categories, only allow category assignment if explicitly changing status to completed
+    if (isSpecialCategory) {
+      if (data.status !== 'completed') {
+        categoryId = null;
+      }
     }
 
     // Save metadata with previous state and additional fields if provided
@@ -37,8 +44,8 @@ export async function PATCH(
       previousState: data.previousState || {},
       categoryCode: data.categoryCode,
       categoryName: data.categoryName,
-      // For special codes, explicitly mark as not needing review if status is completed
-      needsReview: categoryId === null && data.status !== 'completed'
+      // Special handling for ELVI transactions (600)
+      needsReview: internalCode === '600' && data.status !== 'completed'
     };
 
     // Update the transaction with fields that exist in the Prisma schema
@@ -70,10 +77,10 @@ export async function PATCH(
       });
     }
 
-    // Return the display categoryCode based on whether it's a special numeric code
-    const displayCategoryCode = categoryId === null ? 
-      (categoryCode || existingTransaction.internalCode) : 
-      data.categoryCode;
+    // Return the display categoryCode based on transaction type
+    const displayCategoryCode = isSpecialCategory ? 
+      (internalCode === '600' ? '600' : '23152') : 
+      (data.categoryCode || existingTransaction.internalCode);
 
     return NextResponse.json({
       ...updatedTransaction,

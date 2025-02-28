@@ -1,0 +1,1064 @@
+2025-02-28T11:20:48.392Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "17973",
+  "internalCode": "0822",
+  "amount": 640.92,
+  "id": "17250839-2023-17973-4"
+}
+2025-02-28T11:20:48.527Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21161",
+  "internalCode": "0812",
+  "amount": 3204.76,
+  "id": "17250839-2023-21161-5"
+}
+2025-02-28T11:20:48.621Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21106",
+  "internalCode": "0822",
+  "amount": -0.26,
+  "id": "17250839-2023-21106-6"
+}
+2025-02-28T11:20:48.710Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21162",
+  "internalCode": "0812",
+  "amount": 3204.76,
+  "id": "17250839-2023-21162-7"
+}
+2025-02-28T11:20:48.799Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21105",
+  "internalCode": "0822",
+  "amount": 1167.47,
+  "id": "17250839-2023-21105-8"
+}
+2025-02-28T11:20:48.949Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "23166",
+  "internalCode": "0812",
+  "amount": 2027.52,
+  "id": "17250839-2023-23166-9"
+}
+2025-02-28T11:20:49.046Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "22996",
+  "internalCode": "0812",
+  "amount": 3204.76,
+  "id": "17250839-2023-22996-10"
+}
+2025-02-28T11:20:49.138Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "23165",
+  "internalCode": "0812",
+  "amount": 1152.36,
+  "id": "17250839-2023-23165-11"
+}
+2025-02-28T11:20:49.228Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "22919",
+  "internalCode": "0822",
+  "amount": 1167.47,
+  "id": "17250839-2023-22919-12"
+}
+2025-02-28T11:20:49.355Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "25036",
+  "internalCode": "0812",
+  "amount": 2983.83,
+  "id": "17250839-2023-25036-17"
+}
+2025-02-28T11:20:49.439Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "24785",
+  "internalCode": "0812",
+  "amount": 4570.3,
+  "id": "17250839-2023-24785-18"
+}
+2025-02-28T11:20:49.525Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "24735",
+  "internalCode": "0822",
+  "amount": 1167.47,
+  "id": "17250839-2023-24735-19"
+}
+2025-02-28T11:20:49.614Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "20390",
+  "internalCode": "0865",
+  "amount": 11205.91,
+  "id": "17250839-2023-20390-20"
+}
+2025-02-28T11:20:49.755Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "20392",
+  "internalCode": "0865",
+  "amount": 5602.12,
+  "id": "17250839-2023-20392-21"
+}
+2025-02-28T11:20:49.850Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21363",
+  "internalCode": "0831",
+  "amount": 23.74,
+  "id": "17250839-2023-21363-22"
+}
+2025-02-28T11:20:49.946Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21367",
+  "internalCode": "0831",
+  "amount": 124.95,
+  "id": "17250839-2023-21367-23"
+}
+2025-02-28T11:20:50.071Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21362",
+  "internalCode": "0831",
+  "amount": 124.95,
+  "id": "17250839-2023-21362-24"
+}
+2025-02-28T11:20:50.168Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21365",
+  "internalCode": "0831",
+  "amount": -23.74,
+  "id": "17250839-2023-21365-25"
+}
+2025-02-28T11:20:50.262Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21364",
+  "internalCode": "0831",
+  "amount": -124.95,
+  "id": "17250839-2023-21364-26"
+}
+2025-02-28T11:20:50.355Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21611",
+  "internalCode": "0850",
+  "amount": 2075,
+  "id": "17250839-2023-21611-27"
+}
+2025-02-28T11:20:50.482Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "22345",
+  "internalCode": "0850",
+  "amount": 2109.11,
+  "id": "17250839-2023-22345-28"
+}
+2025-02-28T11:20:50.570Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "22360",
+  "internalCode": "0850",
+  "amount": 1860,
+  "id": "17250839-2023-22360-29"
+}
+2025-02-28T11:20:50.659Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "23319",
+  "internalCode": "0850",
+  "amount": 29928.5,
+  "id": "17250839-2023-23319-30"
+}
+2025-02-28T11:20:50.748Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "23319",
+  "internalCode": "0831",
+  "amount": 20391.84,
+  "id": "17250839-2023-23319-32"
+}
+2025-02-28T11:20:50.866Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "23319",
+  "internalCode": "0835",
+  "amount": 2975,
+  "id": "17250839-2023-23319-33"
+}
+2025-02-28T11:20:50.953Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "28572",
+  "internalCode": "0812",
+  "amount": 3204.76,
+  "id": "17250839-2023-28572-31"
+}
+2025-02-28T11:20:51.035Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "28521",
+  "internalCode": "0822",
+  "amount": 1167.47,
+  "id": "17250839-2023-28521-34"
+}
+2025-02-28T11:20:51.117Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "28798",
+  "internalCode": "0812",
+  "amount": -766.4,
+  "id": "17250839-2023-28798-35"
+}
+2025-02-28T11:20:51.264Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "23810",
+  "internalCode": "0850",
+  "amount": 17219.3,
+  "id": "17250839-2023-23810-36"
+}
+2025-02-28T11:20:51.353Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "24205",
+  "internalCode": "0850",
+  "amount": 3993.93,
+  "id": "17250839-2023-24205-37"
+}
+2025-02-28T11:20:51.472Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "25126",
+  "internalCode": "0843",
+  "amount": 486.92,
+  "id": "17250839-2023-25126-38"
+}
+2025-02-28T11:20:51.564Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "2159",
+  "internalCode": "0812",
+  "amount": 3204.76,
+  "id": "17250839-2024-2159-39"
+}
+2025-02-28T11:20:51.699Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "2490",
+  "internalCode": "0822",
+  "amount": 1167.48,
+  "id": "17250839-2024-2490-40"
+}
+2025-02-28T11:20:51.793Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "26011",
+  "internalCode": "0850",
+  "amount": 2109.11,
+  "id": "17250839-2023-26011-41"
+}
+2025-02-28T11:20:51.881Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "26010",
+  "internalCode": "0850",
+  "amount": -2109.11,
+  "id": "17250839-2023-26010-42"
+}
+2025-02-28T11:20:51.966Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1386",
+  "internalCode": "0831",
+  "amount": 149.95,
+  "id": "17250839-2024-1386-43"
+}
+2025-02-28T11:20:52.104Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1462",
+  "internalCode": "0850",
+  "amount": 400.24,
+  "id": "17250839-2024-1462-44"
+}
+2025-02-28T11:20:52.200Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1932",
+  "internalCode": "0850",
+  "amount": -266.83,
+  "id": "17250839-2024-1932-45"
+}
+2025-02-28T11:20:52.283Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1930",
+  "internalCode": "0850",
+  "amount": -133.41,
+  "id": "17250839-2024-1930-46"
+}
+2025-02-28T11:20:52.377Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1933",
+  "internalCode": "0850",
+  "amount": 266.83,
+  "id": "17250839-2024-1933-47"
+}
+2025-02-28T11:20:52.506Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1931",
+  "internalCode": "0850",
+  "amount": 133.41,
+  "id": "17250839-2024-1931-48"
+}
+2025-02-28T11:20:52.599Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5471",
+  "internalCode": "0812",
+  "amount": 3206.01,
+  "id": "17250839-2024-5471-49"
+}
+2025-02-28T11:20:52.688Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5472",
+  "internalCode": "0812",
+  "amount": 1.25,
+  "id": "17250839-2024-5472-50"
+}
+2025-02-28T11:20:52.783Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "6119",
+  "internalCode": "0822",
+  "amount": 1166.54,
+  "id": "17250839-2024-6119-51"
+}
+2025-02-28T11:20:52.923Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "6118",
+  "internalCode": "0822",
+  "amount": -0.94,
+  "id": "17250839-2024-6118-52"
+}
+2025-02-28T11:20:53.033Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5473",
+  "internalCode": "0812",
+  "amount": 900,
+  "id": "17250839-2024-5473-53"
+}
+2025-02-28T11:20:53.121Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "9897",
+  "internalCode": "0812",
+  "amount": 3266.01,
+  "id": "17250839-2024-9897-54"
+}
+2025-02-28T11:20:53.214Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "11083",
+  "internalCode": "0822",
+  "amount": 1166.54,
+  "id": "17250839-2024-11083-55"
+}
+2025-02-28T11:20:53.360Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "9899",
+  "internalCode": "0812",
+  "amount": 60,
+  "id": "17250839-2024-9899-56"
+}
+2025-02-28T11:20:53.457Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "10461",
+  "internalCode": "0822",
+  "amount": 1166.54,
+  "id": "17250839-2024-10461-57"
+}
+2025-02-28T11:20:53.550Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "9898",
+  "internalCode": "0812",
+  "amount": 60,
+  "id": "17250839-2024-9898-58"
+}
+2025-02-28T11:20:53.643Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "11084",
+  "internalCode": "0822",
+  "amount": 602.97,
+  "id": "17250839-2024-11084-59"
+}
+2025-02-28T11:20:53.789Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "3962",
+  "internalCode": "0850",
+  "amount": 1754.99,
+  "id": "17250839-2024-3962-60"
+}
+2025-02-28T11:20:53.880Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "13073",
+  "internalCode": "0822",
+  "amount": 621.05,
+  "id": "17250839-2024-13073-61"
+}
+2025-02-28T11:20:53.966Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "12780",
+  "internalCode": "0822",
+  "amount": 1295.19,
+  "id": "17250839-2024-12780-62"
+}
+2025-02-28T11:20:54.060Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "13291",
+  "internalCode": "0822",
+  "amount": 910.64,
+  "id": "17250839-2024-13291-63"
+}
+2025-02-28T11:20:54.205Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "12545",
+  "internalCode": "0812",
+  "amount": 3266.01,
+  "id": "17250839-2024-12545-64"
+}
+2025-02-28T11:20:54.293Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "15552",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-15552-67"
+}
+2025-02-28T11:20:54.381Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "14944",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-14944-68"
+}
+2025-02-28T11:20:54.469Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "14701",
+  "internalCode": "0812",
+  "amount": 3266.01,
+  "id": "17250839-2024-14701-69"
+}
+2025-02-28T11:20:54.629Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "14945",
+  "internalCode": "0822",
+  "amount": 186.72,
+  "id": "17250839-2024-14945-70"
+}
+2025-02-28T11:20:54.721Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "15553",
+  "internalCode": "0822",
+  "amount": -120.29,
+  "id": "17250839-2024-15553-71"
+}
+2025-02-28T11:20:54.817Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "15299",
+  "internalCode": "0822",
+  "amount": 70.51,
+  "id": "17250839-2024-15299-72"
+}
+2025-02-28T11:20:54.932Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "9316",
+  "internalCode": "0865",
+  "amount": 3670.21,
+  "id": "17250839-2024-9316-75"
+}
+2025-02-28T11:20:55.024Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "9314",
+  "internalCode": "0865",
+  "amount": 7341.52,
+  "id": "17250839-2024-9314-76"
+}
+2025-02-28T11:20:55.134Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "16776",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-16776-77"
+}
+2025-02-28T11:20:55.231Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "17335",
+  "internalCode": "0822",
+  "amount": 253.2,
+  "id": "17250839-2024-17335-78"
+}
+2025-02-28T11:20:55.378Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "17336",
+  "internalCode": "0822",
+  "amount": 510.67,
+  "id": "17250839-2024-17336-79"
+}
+2025-02-28T11:20:55.471Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "17337",
+  "internalCode": "0822",
+  "amount": 1992.58,
+  "id": "17250839-2024-17337-80"
+}
+2025-02-28T11:20:55.557Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "17118",
+  "internalCode": "0822",
+  "amount": 19.17,
+  "id": "17250839-2024-17118-81"
+}
+2025-02-28T11:20:55.646Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "16565",
+  "internalCode": "0812",
+  "amount": 3266.01,
+  "id": "17250839-2024-16565-82"
+}
+2025-02-28T11:20:55.790Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "11797",
+  "internalCode": "0850",
+  "amount": -872.67,
+  "id": "17250839-2024-11797-85"
+}
+2025-02-28T11:20:55.883Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "11795",
+  "internalCode": "0850",
+  "amount": -1236.44,
+  "id": "17250839-2024-11795-86"
+}
+2025-02-28T11:20:55.972Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "11796",
+  "internalCode": "0850",
+  "amount": 1236.44,
+  "id": "17250839-2024-11796-87"
+}
+2025-02-28T11:20:56.068Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "11798",
+  "internalCode": "0850",
+  "amount": 872.67,
+  "id": "17250839-2024-11798-88"
+}
+2025-02-28T11:20:56.207Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "11950",
+  "internalCode": "0865",
+  "amount": 1295.72,
+  "id": "17250839-2024-11950-91"
+}
+2025-02-28T11:20:56.298Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "11952",
+  "internalCode": "0865",
+  "amount": 647.77,
+  "id": "17250839-2024-11952-92"
+}
+2025-02-28T11:20:56.394Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "19133",
+  "internalCode": "0822",
+  "amount": 1992.58,
+  "id": "17250839-2024-19133-93"
+}
+2025-02-28T11:20:56.484Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "18697",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-18697-94"
+}
+2025-02-28T11:20:56.624Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "18509",
+  "internalCode": "0812",
+  "amount": 3266.01,
+  "id": "17250839-2024-18509-95"
+}
+2025-02-28T11:20:56.713Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "19428",
+  "internalCode": "0812",
+  "amount": 3411.89,
+  "id": "17250839-2024-19428-96"
+}
+2025-02-28T11:20:56.806Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "19429",
+  "internalCode": "0812",
+  "amount": 1776.82,
+  "id": "17250839-2024-19429-97"
+}
+2025-02-28T11:20:56.906Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "12543",
+  "internalCode": "0843",
+  "amount": 44.98,
+  "id": "17250839-2024-12543-98"
+}
+2025-02-28T11:20:57.044Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "12655",
+  "internalCode": "0846",
+  "amount": 177.3,
+  "id": "17250839-2024-12655-99"
+}
+2025-02-28T11:20:57.135Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "NODOC-1740741192095-102",
+  "internalCode": "0600",
+  "amount": 898.45,
+  "id": "17250839-2024-NODOC-1740741192095-102-102"
+}
+2025-02-28T11:20:57.229Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21215",
+  "internalCode": "0812",
+  "amount": -19.66,
+  "id": "17250839-2024-21215-103"
+}
+2025-02-28T11:20:57.320Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "20380",
+  "internalCode": "0812",
+  "amount": 3266.01,
+  "id": "17250839-2024-20380-104"
+}
+2025-02-28T11:20:57.471Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21217",
+  "internalCode": "0812",
+  "amount": 3392.23,
+  "id": "17250839-2024-21217-105"
+}
+2025-02-28T11:20:57.564Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "20936",
+  "internalCode": "0822",
+  "amount": 1992.58,
+  "id": "17250839-2024-20936-106"
+}
+2025-02-28T11:20:57.654Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21216",
+  "internalCode": "0812",
+  "amount": 68.77,
+  "id": "17250839-2024-21216-107"
+}
+2025-02-28T11:20:57.746Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "20556",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-20556-108"
+}
+2025-02-28T11:20:57.880Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "14344",
+  "internalCode": "0865",
+  "amount": 2800.79,
+  "id": "17250839-2024-14344-111"
+}
+2025-02-28T11:20:57.966Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "14346",
+  "internalCode": "0865",
+  "amount": 1400.19,
+  "id": "17250839-2024-14346-112"
+}
+2025-02-28T11:20:58.053Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "15304",
+  "internalCode": "0843",
+  "amount": 22.24,
+  "id": "17250839-2024-15304-113"
+}
+2025-02-28T11:20:58.143Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "22646",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-22646-114"
+}
+2025-02-28T11:20:58.293Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "23284",
+  "internalCode": "0812",
+  "amount": 3392.23,
+  "id": "17250839-2024-23284-115"
+}
+2025-02-28T11:20:58.384Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "23039",
+  "internalCode": "0822",
+  "amount": 1992.58,
+  "id": "17250839-2024-23039-116"
+}
+2025-02-28T11:20:58.469Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "22470",
+  "internalCode": "0812",
+  "amount": 3266.01,
+  "id": "17250839-2024-22470-117"
+}
+2025-02-28T11:20:58.560Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "15578",
+  "internalCode": "0850",
+  "amount": 898.45,
+  "id": "17250839-2024-15578-118"
+}
+2025-02-28T11:20:58.694Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "25670",
+  "internalCode": "0812",
+  "amount": 1826.59,
+  "id": "17250839-2024-25670-119"
+}
+2025-02-28T11:20:58.784Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "25209",
+  "internalCode": "0812",
+  "amount": 3392.24,
+  "id": "17250839-2024-25209-120"
+}
+2025-02-28T11:20:58.896Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "25007",
+  "internalCode": "0822",
+  "amount": 1992.58,
+  "id": "17250839-2024-25007-121"
+}
+2025-02-28T11:20:58.990Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "24647",
+  "internalCode": "0812",
+  "amount": 1334.17,
+  "id": "17250839-2024-24647-122"
+}
+2025-02-28T11:20:59.132Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "24744",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-24744-123"
+}
+2025-02-28T11:20:59.223Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "26249",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-26249-126"
+}
+2025-02-28T11:20:59.315Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "26685",
+  "internalCode": "0812",
+  "amount": 4054.35,
+  "id": "17250839-2024-26685-127"
+}
+2025-02-28T11:20:59.403Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "26481",
+  "internalCode": "0822",
+  "amount": 1992.58,
+  "id": "17250839-2024-26481-128"
+}
+2025-02-28T11:20:59.565Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "26165",
+  "internalCode": "0812",
+  "amount": 2813.28,
+  "id": "17250839-2024-26165-129"
+}
+2025-02-28T11:20:59.658Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "27114",
+  "internalCode": "0812",
+  "amount": 2183.09,
+  "id": "17250839-2024-27114-130"
+}
+2025-02-28T11:20:59.747Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21773",
+  "internalCode": "0865",
+  "amount": 5882.63,
+  "id": "17250839-2024-21773-131"
+}
+2025-02-28T11:20:59.842Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "21775",
+  "internalCode": "0865",
+  "amount": 2940.88,
+  "id": "17250839-2024-21775-132"
+}
+2025-02-28T11:20:59.979Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "29511",
+  "internalCode": "0822",
+  "amount": 1992.58,
+  "id": "17250839-2024-29511-135"
+}
+2025-02-28T11:21:00.078Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "29873",
+  "internalCode": "0812",
+  "amount": 3472.49,
+  "id": "17250839-2024-29873-136"
+}
+2025-02-28T11:21:00.165Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "30437",
+  "internalCode": "0812",
+  "amount": 1869.8,
+  "id": "17250839-2024-30437-137"
+}
+2025-02-28T11:21:00.256Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "28894",
+  "internalCode": "0822",
+  "amount": 1481.91,
+  "id": "17250839-2024-28894-138"
+}
+2025-02-28T11:21:00.403Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "28620",
+  "internalCode": "0812",
+  "amount": 1358.21,
+  "id": "17250839-2024-28620-139"
+}
+2025-02-28T11:21:00.498Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1721",
+  "internalCode": "0822",
+  "amount": 1992.13,
+  "id": "17250839-2025-1721-140"
+}
+2025-02-28T11:21:00.588Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1870",
+  "internalCode": "0812",
+  "amount": 3472.49,
+  "id": "17250839-2025-1870-141"
+}
+2025-02-28T11:21:00.679Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "2211",
+  "internalCode": "0812",
+  "amount": 1869.8,
+  "id": "17250839-2025-2211-142"
+}
+2025-02-28T11:21:00.831Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1051",
+  "internalCode": "0846",
+  "amount": 12.1,
+  "id": "17250839-2025-1051-143"
+}
+2025-02-28T11:21:00.919Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "4467",
+  "internalCode": "0822",
+  "amount": 2001.61,
+  "id": "17250839-2025-4467-144"
+}
+2025-02-28T11:21:01.008Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5199",
+  "internalCode": "0812",
+  "amount": 10.92,
+  "id": "17250839-2025-5199-145"
+}
+2025-02-28T11:21:01.100Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5427",
+  "internalCode": "0822",
+  "amount": 1488.52,
+  "id": "17250839-2025-5427-146"
+}
+2025-02-28T11:21:01.238Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "4705",
+  "internalCode": "0812",
+  "amount": 3684.85,
+  "id": "17250839-2025-4705-147"
+}
+2025-02-28T11:21:01.332Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5426",
+  "internalCode": "0822",
+  "amount": 1488.52,
+  "id": "17250839-2025-5426-148"
+}
+2025-02-28T11:21:01.432Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "4468",
+  "internalCode": "0822",
+  "amount": 9.48,
+  "id": "17250839-2025-4468-149"
+}
+2025-02-28T11:21:01.528Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "4704",
+  "internalCode": "0812",
+  "amount": 20.26,
+  "id": "17250839-2025-4704-150"
+}
+2025-02-28T11:21:01.683Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5200",
+  "internalCode": "0812",
+  "amount": 1984.14,
+  "id": "17250839-2025-5200-151"
+}
+2025-02-28T11:21:01.768Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "NODOC-1740741192094-0",
+  "internalCode": "0822",
+  "amount": 17065.98696,
+  "id": "17250839-2025-NODOC-1740741192094-0-0"
+}
+2025-02-28T11:21:01.860Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "NODOC-1740741192094-1",
+  "internalCode": "0812",
+  "amount": 17733.431164904,
+  "id": "17250839-2025-NODOC-1740741192094-1-1"
+}
+2025-02-28T11:21:01.950Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "NODOC-1740741192094-2",
+  "internalCode": "0812",
+  "amount": 59354.3253,
+  "id": "17250839-2025-NODOC-1740741192094-2-2"
+}
+2025-02-28T11:21:02.090Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "NODOC-1740741192094-3",
+  "internalCode": "0822",
+  "amount": 19810.3576,
+  "id": "17250839-2025-NODOC-1740741192094-3-3"
+}
+2025-02-28T11:21:02.182Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5297",
+  "internalCode": "23152",
+  "amount": 16808.03,
+  "id": "17250839-2023-5297-13"
+}
+2025-02-28T11:21:02.274Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5296",
+  "internalCode": "23152",
+  "amount": 84040.15,
+  "id": "17250839-2023-5296-14"
+}
+2025-02-28T11:21:02.360Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5579",
+  "internalCode": "23152",
+  "amount": 16808.03,
+  "id": "17250839-2023-5579-15"
+}
+2025-02-28T11:21:02.506Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5578",
+  "internalCode": "23152",
+  "amount": 84040.15,
+  "id": "17250839-2023-5578-16"
+}
+2025-02-28T11:21:02.636Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1495",
+  "internalCode": "23152",
+  "amount": 55058.66,
+  "id": "17250839-2024-1495-65"
+}
+2025-02-28T11:21:02.780Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1496",
+  "internalCode": "23152",
+  "amount": 11011.73,
+  "id": "17250839-2024-1496-66"
+}
+2025-02-28T11:21:03.832Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1756",
+  "internalCode": "23152",
+  "amount": 55058.66,
+  "id": "17250839-2024-1756-73"
+}
+2025-02-28T11:21:04.838Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "1757",
+  "internalCode": "23152",
+  "amount": 11011.73,
+  "id": "17250839-2024-1757-74"
+}
+2025-02-28T11:21:05.833Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "2830",
+  "internalCode": "23152",
+  "amount": 1943.49,
+  "id": "17250839-2024-2830-83"
+}
+2025-02-28T11:21:06.821Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "2829",
+  "internalCode": "23152",
+  "amount": 9717.45,
+  "id": "17250839-2024-2829-84"
+}
+2025-02-28T11:21:07.837Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "2923",
+  "internalCode": "23152",
+  "amount": 1943.49,
+  "id": "17250839-2024-2923-89"
+}
+2025-02-28T11:21:08.830Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "2922",
+  "internalCode": "23152",
+  "amount": 9717.45,
+  "id": "17250839-2024-2922-90"
+}
+2025-02-28T11:21:09.857Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "3341",
+  "internalCode": "23152",
+  "amount": 21004.92,
+  "id": "17250839-2024-3341-100"
+}
+2025-02-28T11:21:10.816Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "3342",
+  "internalCode": "23152",
+  "amount": 4200.98,
+  "id": "17250839-2024-3342-101"
+}
+2025-02-28T11:21:11.822Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "3811",
+  "internalCode": "23152",
+  "amount": 4200.98,
+  "id": "17250839-2024-3811-109"
+}
+2025-02-28T11:21:12.831Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "3810",
+  "internalCode": "23152",
+  "amount": 21004.92,
+  "id": "17250839-2024-3810-110"
+}
+2025-02-28T11:21:13.884Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "4811",
+  "internalCode": "23152",
+  "amount": 8823.51,
+  "id": "17250839-2024-4811-124"
+}
+2025-02-28T11:21:14.829Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "4810",
+  "internalCode": "23152",
+  "amount": 44117.54,
+  "id": "17250839-2024-4810-125"
+}
+2025-02-28T11:21:15.830Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5412",
+  "internalCode": "23152",
+  "amount": 44117.54,
+  "id": "17250839-2024-5412-133"
+}
+2025-02-28T11:21:16.829Z: {
+  "message": "Processing new transaction",
+  "documentNumber": "5413",
+  "internalCode": "23152",
+  "amount": 8823.51,
+  "id": "17250839-2024-5413-134"
+}

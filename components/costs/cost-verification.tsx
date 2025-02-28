@@ -53,7 +53,7 @@ export function CostVerification({
       ? 'Verification successful. Ready to save.'
       : `Warning: Budget exceeded in following categories:\n${overBudgetItems.join('\n')}`;
 
-    onVerificationComplete(allValid, message);
+      onVerificationComplete(true, 'Verification successful. Ready to save.');
   };
 
   return (

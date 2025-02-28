@@ -10,6 +10,7 @@ import { UploadControls } from './upload-controls';
 import type { ProcessedData, Transaction, TransactionUpdate } from '@/types/transactions';
 import { CostsTabs } from './costs-tabs';
 import { Category } from '@/types/budget';
+import { SpecialCategoryHandler } from './handlers/special-category-handler';
 
 interface TransactionRow {
   'Jahr': string | number;
@@ -191,42 +192,49 @@ export function CostsUpload() {
           </Alert>
         )}
 
-        {processedData && (
-          <div className="mt-4">
-            <CostsTabs 
-              processedData={processedData}
-              categories={categories}
-              onTransactionUpdate={handleTransactionUpdate}
-            />
-          </div>
+      {processedData && (
+        <div className="mt-4">
+          <CostsTabs 
+            processedData={processedData}
+            categories={categories}
+            onTransactionUpdate={handleTransactionUpdate}
+          />
+        </div>
         )}
       </CardContent>
     </Card>
   );
 }
 
+// Update this function in your costs-upload.tsx file
 function processTransactions(rows: TransactionRow[], categories: Category[]): ProcessedData {
   const transactions = rows
     .filter((row) => row['Jahr'] && row['Betrag'])
     .map((row, index) => {
       const internalCode = row['Konto (KoArt)']?.toString() || '';
       const transactionType = row['Buchungsart (Art)'];
+      const normalizedInternalCode = internalCode.replace(/^0+/, ''); // Remove leading zeros
       
-      // More explicit special handling check
+      // Handle special cases
       const requiresSpecialHandling = 
         (transactionType === 'IVMC-Hochr.') || 
-        (internalCode === '23152');
+        (normalizedInternalCode === '23152');
+        
+      // For 600 (ELVI) we don't want to auto-assign any category
+      const is600 = normalizedInternalCode === '600';
 
       const internalCodeNum = internalCode.padStart(4, '0');
-      const categoryCode = `F${internalCodeNum}`;
-      const matchingCategory = !requiresSpecialHandling ? 
-        categories.find(cat => cat.code === categoryCode) : null;
+      
+      // Only try to find a matching category if it's not a special code
+      const matchingCategory = (!requiresSpecialHandling && !is600) ? 
+        categories.find(cat => cat.code === `F${internalCodeNum}`) : null;
 
       const parentCategory = matchingCategory?.parentId ? 
         categories.find(c => c.id === matchingCategory.parentId) : null;
 
-      // Generate unique ID by adding an index suffix to handle split transactions
-      const uniqueId = `${row['Projekt (KTR)']}-${row['Jahr']}-${row['BelegNr (BelegNr)']}-${index}`;
+      // Make a valid transaction ID that doesn't have undefined
+      const docNumber = row['BelegNr (BelegNr)']?.toString() || `NODOC-${Date.now()}-${index}`;
+      const uniqueId = `${row['Projekt (KTR)']}-${row['Jahr']}-${docNumber}-${index}`;
 
       const transaction: Transaction = {
         id: uniqueId,
@@ -237,7 +245,7 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
         description: row['Bezeichnung (Konto_Bez)']?.toString() || '',
         costGroup: row['Kontengruppe (KoArt_GR)']?.toString() || '',
         transactionType: transactionType?.toString() || '',
-        documentNumber: row['BelegNr (BelegNr)']?.toString() || '',
+        documentNumber: docNumber,
         bookingDate: new Date(row['BuchDat (Buch_Dat)'] || row['Erstellungsdatum'] || new Date()),
         personReference: row['Grund1 (Grund1)']?.toString() || '',
         details: row['Grund2 (Grund2)']?.toString() || '',
@@ -246,13 +254,17 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
         paymentPartner: row['Zahlungspartner (Zahlungsp)']?.toString() || '',
         internalAccount: row['koa (koa)']?.toString() || '',
         accountLabel: row['koa-Bezeichnung (koa_Bez)']?.toString() || '',
-        categoryId: matchingCategory?.id || '',
-        categoryCode: matchingCategory?.code,
+        categoryId: matchingCategory?.id || null,
+        categoryCode: matchingCategory?.code || null, // Don't use internalCode as categoryCode for special cases
         categoryName: matchingCategory?.name,
         requiresSpecialHandling,
         categoryParentCode: parentCategory?.code,
         categoryParentId: parentCategory?.id,
-        status: 'unprocessed'
+        status: is600 ? 'unprocessed' : 'unprocessed',
+        metadata: {
+          needsReview: is600, // Mark 600 transactions as needing review
+          originalInternalCode: internalCode
+        }
       };
 
       return transaction;

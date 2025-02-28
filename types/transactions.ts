@@ -18,13 +18,14 @@ export interface Transaction {
   internalAccount?: string;
   accountLabel?: string;
   categoryId?: string | null;
-  categoryCode?: string;
+  categoryCode?: string | null | undefined;
   categoryName?: string;
   requiresSpecialHandling: boolean;
   categoryParentCode?: string | null;
   categoryParentId?: string | null;
   status?: TransactionStatus;
   previousState?: TransactionPreviousState | null;
+  isSplit?: boolean;
   totalSplits?: number;
   originalAmount?: number;
   metadata?: Record<string, any>;
@@ -48,6 +49,7 @@ export interface TransactionUpdate {
   categoryId?: string | null;
   categoryName?: string;
   previousState?: TransactionPreviousState | null;
+  requiresSpecialHandling?: boolean;
 }
 
 export interface CategoryTotal {

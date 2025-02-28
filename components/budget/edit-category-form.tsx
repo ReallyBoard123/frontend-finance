@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { CategorySelect } from "@/components/common/ui/category-select";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Category, CategoryFormData } from "@/types/budget";
 import { useCategoryOperations } from '@/lib/hooks/useCategoryOperations';
 
@@ -17,7 +16,6 @@ const categorySchema = z.object({
   name: z.string().min(1, "Name is required"),
   parentId: z.string().nullable(),
   isSpecialCategory: z.boolean().optional(),
-  categoryType: z.string().optional(),
   budgets: z.record(z.string(), z.number().min(0, "Budget must be positive")).optional(),
   color: z.string().optional()
 });
@@ -43,7 +41,6 @@ export function EditCategoryForm({ category, open, onOpenChange }: EditCategoryF
       name: category.name,
       parentId: category.parentId,
       isSpecialCategory: category.isSpecialCategory || false,
-      categoryType: category.categoryType,
       budgets: hasChildren ? undefined : category.budgets,
       color: category.color || ''
     }
@@ -89,34 +86,7 @@ export function EditCategoryForm({ category, open, onOpenChange }: EditCategoryF
             )}
           />
 
-          {isSpecialCategory && (
-            <FormField
-              control={form.control}
-              name="categoryType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category Type</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="ALLOCATION">Allocation (600)</SelectItem>
-                      <SelectItem value="PAYMENT">Payment (23152)</SelectItem>
-                      <SelectItem value="OTHER">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>Determines how transactions are processed</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
+          {/* Removed CategoryType selector that had 600 and 23152 */}
 
           <FormField
             control={form.control}
