@@ -1,3 +1,4 @@
+// components/costs/inspect-mode.tsx
 import React, { useState } from 'react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,6 +10,19 @@ interface InspectModeProps {
   transactions: Transaction[];
   title?: string;
 }
+
+// Define an interface for components that can accept our props
+interface ComponentWithInspectProps {
+  onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void;
+  isInspectMode?: boolean;
+}
+
+// Helper function to check if a component accepts certain props
+const isValidComponentWithProps = (child: React.ReactElement): child is React.ReactElement<ComponentWithInspectProps> => {
+  const { type } = child;
+  // If it's a custom component (not a DOM element), it should accept our props
+  return typeof type !== 'string';
+};
 
 export function InspectMode({ 
   children, 
@@ -35,14 +49,16 @@ export function InspectMode({
     ) : [];
 
   const childrenWithProps = React.Children.map(children, child => {
-    if (React.isValidElement<{ 
-      onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void; 
-      isInspectMode?: boolean 
-    }>(child)) {
-      return React.cloneElement(child, {
-        onCellClick: handleCellClick,
-        isInspectMode,
-      });
+    if (React.isValidElement(child)) {
+      // Only add props if it's a custom component, not a DOM element
+      if (isValidComponentWithProps(child)) {
+        // Type assertion to tell TypeScript these props are valid
+        return React.cloneElement(child, {
+          onCellClick: handleCellClick,
+          isInspectMode,
+        } as Partial<ComponentWithInspectProps>);
+      }
+      return child;
     }
     return child;
   });

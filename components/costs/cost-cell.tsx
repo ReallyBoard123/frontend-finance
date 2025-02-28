@@ -1,3 +1,4 @@
+// components/costs/cost-cell.tsx
 import React from 'react';
 import { cn } from "@/lib/utils";
 
@@ -28,16 +29,18 @@ export function CostCell({
     }
   };
 
+  // Using a wrapper div inside the td to handle the click event
+  // This avoids passing non-standard props to DOM elements
   return (
-    <td 
-      className={cn(
-        "px-4 py-2 text-right",
-        isInspectMode && "hover:bg-blue-50 cursor-pointer",
-        className
-      )}
-      onClick={handleClick}
-    >
-      {amount.toLocaleString(locale)} {currencyCode}
+    <td className={cn("px-4 py-2 text-right", className)}>
+      <div 
+        className={isInspectMode ? "hover:bg-blue-50 cursor-pointer" : ""}
+        onClick={handleClick}
+        role={isInspectMode ? "button" : undefined}
+        tabIndex={isInspectMode ? 0 : undefined}
+      >
+        {amount.toLocaleString(locale)} {currencyCode}
+      </div>
     </td>
   );
 }

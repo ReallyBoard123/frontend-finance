@@ -25,6 +25,8 @@ export interface Transaction {
   categoryParentId?: string | null;
   status?: TransactionStatus;
   previousState?: TransactionPreviousState | null;
+  totalSplits?: number;
+  originalAmount?: number;
   metadata?: Record<string, any>;
 }
 

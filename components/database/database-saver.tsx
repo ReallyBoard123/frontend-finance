@@ -17,9 +17,15 @@ interface YearlyTotalCategory {
   transactions: Transaction[];
 }
 
-function generateTransactionId(transaction: Transaction): string {
+function generateTransactionId(transaction: Transaction, index: number = 0): string {
+  // Include the transaction's current ID if it already has one (which includes the index)
+  if (transaction.id && transaction.id.includes('-')) {
+    return transaction.id;
+  }
+  
+  // Otherwise generate a new ID with an index suffix
   const docNumber = transaction.documentNumber || `NO_DOC_${Date.now()}`;
-  return `${transaction.projectCode}-${transaction.year}-${docNumber}`;
+  return `${transaction.projectCode}-${transaction.year}-${docNumber}-${index}`;
 }
 
 function validateTransaction(transaction: Transaction): { isValid: boolean; missingFields: string[]; fixableFields: string[] } {
@@ -58,7 +64,7 @@ interface TransactionMetadata {
   categoryCode?: string;
 }
 
-function prepareTransactionData(transaction: Transaction) {
+function prepareTransactionData(transaction: Transaction, index: number = 0) {
   // For special numeric codes (600, 23152), preserve them without forcing a category
   const isSpecialCode = /^0*(600|23152)$/.test(transaction.internalCode);
   
@@ -70,7 +76,9 @@ function prepareTransactionData(transaction: Transaction) {
   
   return {
     ...transaction,
-    id: generateTransactionId(transaction),
+    id: generateTransactionId(transaction, index),
+    isSplit: false, // Set to true if you know it's a split transaction
+    splitIndex: index,
     internalCode: transaction.internalCode.toString().padStart(4, '0'),
     bookingDate: new Date(transaction.bookingDate).toISOString(),
     invoiceDate: transaction.invoiceDate ? new Date(transaction.invoiceDate).toISOString() : null,
@@ -96,6 +104,7 @@ function prepareTransactionData(transaction: Transaction) {
     } as TransactionMetadata
   };
 }
+
 
 export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: DatabaseSaverProps) {
   const [saving, setSaving] = useState(false);
@@ -157,42 +166,73 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
         ...processedData.specialTransactions
       ];
 
-      for (const transaction of allTransactions) {
-        const { isValid, missingFields, fixableFields } = validateTransaction(transaction);
-        const hasFixableFieldsOnly = !isValid && missingFields.length === 0 && fixableFields.length > 0;
-
-        if (!isValid && !hasFixableFieldsOnly) {
-          errorCount++;
-          continue;
+      // Group transactions by document number to identify splits
+      const transactionsByDoc = allTransactions.reduce((acc, transaction) => {
+        const docKey = `${transaction.projectCode}-${transaction.year}-${transaction.documentNumber}`;
+        if (!acc[docKey]) {
+          acc[docKey] = [];
         }
+        acc[docKey].push(transaction);
+        return acc;
+      }, {} as Record<string, Transaction[]>);
 
-        try {
-          const preparedData = prepareTransactionData(transaction);
-          const checkResponse = await fetch(`/api/transactions/check/${preparedData.id}`);
-          const { found } = await checkResponse.json();
+      // Process each transaction with split awareness
+      for (const [docKey, docTransactions] of Object.entries(transactionsByDoc)) {
+        const isSplit = docTransactions.length > 1;
+        
+        for (let i = 0; i < docTransactions.length; i++) {
+          const transaction = docTransactions[i];
+          const { isValid, missingFields, fixableFields } = validateTransaction(transaction);
+          const hasFixableFieldsOnly = !isValid && missingFields.length === 0 && fixableFields.length > 0;
 
-          if (found) {
-            skippedCount++;
+          if (!isValid && !hasFixableFieldsOnly) {
+            errorCount++;
             continue;
           }
 
-          const response = await fetch('/api/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(preparedData)
-          });
+          try {
+            // Use the index when preparing the data
+            const preparedData = prepareTransactionData(transaction, i);
+            
+            // Set split-related fields if this is part of a split transaction
+            if (isSplit) {
+              preparedData.isSplit = true;
+              preparedData.totalSplits = docTransactions.length;
+              preparedData.splitIndex = i;
+              
+              // Set original amount if this is the first split
+              if (i === 0) {
+                const totalAmount = docTransactions.reduce((sum, t) => sum + t.amount, 0);
+                preparedData.originalAmount = totalAmount;
+              }
+            }
 
-          if (!response.ok) {
-            throw new Error(await response.text());
+            const checkResponse = await fetch(`/api/transactions/check/${preparedData.id}`);
+            const { found } = await checkResponse.json();
+
+            if (found) {
+              skippedCount++;
+              continue;
+            }
+
+            const response = await fetch('/api/transactions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(preparedData)
+            });
+
+            if (!response.ok) {
+              throw new Error(await response.text());
+            }
+
+            successCount++;
+          } catch {
+            errorCount++;
           }
 
-          successCount++;
-        } catch {
-          errorCount++;
+          // Add small delay to prevent overwhelming the server
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
-
-        // Add small delay to prevent overwhelming the server
-        await new Promise(resolve => setTimeout(resolve, 50));
       }
 
       // Fetch updated data after save

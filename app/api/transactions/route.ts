@@ -92,7 +92,8 @@ export async function POST(request: Request) {
       message: 'Processing new transaction',
       documentNumber: data.documentNumber,
       internalCode: data.internalCode,
-      amount: data.amount
+      amount: data.amount,
+      id: data.id
     })
 
     // Normalize data
@@ -124,16 +125,12 @@ export async function POST(request: Request) {
       }
     }
 
-    // Check for existing transaction
-    const existing = await prisma.transaction.findFirst({
-      where: {
-        documentNumber,
-        projectCode,
-        year,
-        bookingDate,
-        internalCode,
-        amount
-      }
+    // Use the provided ID which should include the split index
+    const transactionId = data.id || `${projectCode}-${year}-${documentNumber}-${Date.now()}`;
+
+    // Check for existing transaction with this exact ID
+    const existing = await prisma.transaction.findUnique({
+      where: { id: transactionId }
     })
 
     if (existing) {
@@ -148,10 +145,16 @@ export async function POST(request: Request) {
     const isNumericInternalCode = /^\d+$/.test(rawInternalCode.replace(/^0+/, ''))
     const needsReview = isNumericInternalCode && !category
     
+    // Handle split transaction metadata
+    const isSplit = data.isSplit || false
+    const totalSplits = data.totalSplits || 1
+    const splitIndex = data.splitIndex || 0
+    const originalAmount = data.originalAmount || amount
+    
     // Create transaction - now categoryId can be null
     const transaction = await prisma.transaction.create({
       data: {
-        id: `${projectCode}-${year}-${documentNumber}-${internalCode}`,
+        id: transactionId,
         projectCode,
         year,
         amount,
@@ -171,10 +174,16 @@ export async function POST(request: Request) {
         processed: false,
         status: data.status || 'unprocessed',
         categoryId, // This can now be null
+        // Add split transaction fields
+        isSplit,
+        totalSplits,
+        splitIndex,
+        originalAmount: isSplit ? originalAmount : null,
         metadata: {
           originalInternalCode: data.internalCode,
           needsReview,
-          categoryCode: category?.code
+          categoryCode: category?.code,
+          splitId: isSplit ? `${projectCode}-${year}-${documentNumber}` : null
         }
       },
       include: {

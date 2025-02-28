@@ -208,7 +208,7 @@ export function CostsUpload() {
 function processTransactions(rows: TransactionRow[], categories: Category[]): ProcessedData {
   const transactions = rows
     .filter((row) => row['Jahr'] && row['Betrag'])
-    .map((row) => {
+    .map((row, index) => {
       const internalCode = row['Konto (KoArt)']?.toString() || '';
       const transactionType = row['Buchungsart (Art)'];
       
@@ -225,8 +225,11 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
       const parentCategory = matchingCategory?.parentId ? 
         categories.find(c => c.id === matchingCategory.parentId) : null;
 
+      // Generate unique ID by adding an index suffix to handle split transactions
+      const uniqueId = `${row['Projekt (KTR)']}-${row['Jahr']}-${row['BelegNr (BelegNr)']}-${index}`;
+
       const transaction: Transaction = {
-        id: `${row['Projekt (KTR)']}-${row['Jahr']}-${row['BelegNr (BelegNr)']}`,
+        id: uniqueId,
         projectCode: row['Projekt (KTR)']?.toString() || '',
         year: parseInt(row['Jahr'].toString()),
         amount: parseFloat(row['Betrag'].toString()),
