@@ -24,18 +24,20 @@ export async function GET(request: NextRequest) {
     // Map database model to frontend model
     const mappedTransactions = transactions.map(transaction => {
       // Get category data from the relationship or metadata
-      const categoryData = transaction.category || { code: undefined, name: undefined };
       const metadata = transaction.metadata ? (transaction.metadata as Record<string, unknown>) : {};
+      const categoryData = transaction.category || { code: undefined, name: undefined };
       
       // More explicit special transactions filter
       const isSpecial = type === 'special' && (
         transaction.transactionType === 'IVMC-Hochr.' || 
-        transaction.internalCode === '23152'
+        transaction.internalCode === '23152' ||
+        transaction.internalCode === '023152'
       );
       
       const isRegular = type === 'regular' && 
         transaction.transactionType !== 'IVMC-Hochr.' && 
-        transaction.internalCode !== '23152';
+        transaction.internalCode !== '23152' &&
+        transaction.internalCode !== '023152';
       
       // Return the transaction if it matches the requested type
       if (isSpecial || isRegular) {
@@ -62,7 +64,8 @@ export async function GET(request: NextRequest) {
           categoryCode: metadata.categoryCode || categoryData.code || (transaction.internalCode ? `${transaction.internalCode}` : null),
           categoryName: metadata.categoryName || categoryData.name || null,
           status: transaction.status,
-          requiresSpecialHandling: isSpecial
+          requiresSpecialHandling: isSpecial,
+          metadata: metadata
         };
       }
       return null;
@@ -85,7 +88,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: Request) {
   try {
-    const data = await request.json()
+    const data = await request.json();
     
     // Log incoming data
     logger.log({
@@ -93,68 +96,87 @@ export async function POST(request: Request) {
       documentNumber: data.documentNumber,
       internalCode: data.internalCode,
       amount: data.amount,
-      id: data.id
-    })
+      id: data.id,
+      fingerprint: data.metadata?.fingerprint
+    });
 
     // Normalize data
-    const documentNumber = data.documentNumber?.toString() || `NO_DOC_${Date.now()}`
-    const year = Number(data.year)
-    const bookingDate = new Date(data.bookingDate)
-    const amount = Number(Number(data.amount).toFixed(2))
-    const projectCode = data.projectCode?.toString()
-    const internalCode = data.internalCode?.toString().padStart(4, '0')
+    const documentNumber = data.documentNumber?.toString() || `NO_DOC_${Date.now()}`;
+    const year = Number(data.year);
+    const bookingDate = new Date(data.bookingDate);
+    const amount = Number(Number(data.amount).toFixed(2));
+    const projectCode = data.projectCode?.toString();
+    const internalCode = data.internalCode?.toString().padStart(4, '0');
     
-    // Only try to find a category if we explicitly have a categoryCode that's not a raw numeric code
-    let categoryId = null
-    let category = null
-    
-    if (data.categoryCode && data.categoryCode.startsWith('F')) {
-      // Try to find the category
-      category = await prisma.category.findUnique({
-        where: { code: data.categoryCode }
-      })
+    // First check if this transaction already exists by fingerprint
+    // to prevent duplicates even if ID is different
+    if (data.metadata?.fingerprint) {
+      const existingByFingerprint = await prisma.transaction.findFirst({
+        where: {
+          metadata: {
+            path: ['fingerprint'],
+            equals: data.metadata.fingerprint
+          }
+        }
+      });
       
-      if (category) {
-        categoryId = category.id
-      } else if (data.categoryCode) {
-        logger.error(`Category not found: ${data.categoryCode}`)
-        return NextResponse.json(
-          { error: 'Category not found' },
-          { status: 400 }
-        )
+      if (existingByFingerprint) {
+        logger.log(`Duplicate transaction detected with fingerprint: ${data.metadata.fingerprint}`);
+        return NextResponse.json({
+          message: 'Transaction already exists (by fingerprint)',
+          transaction: existingByFingerprint
+        });
       }
     }
-
-    // Use the provided ID which should include the split index
-    const transactionId = data.id || `${projectCode}-${year}-${documentNumber}-${Date.now()}`;
-
+    
     // Check for existing transaction with this exact ID
     const existing = await prisma.transaction.findUnique({
-      where: { id: transactionId }
-    })
+      where: { id: data.id }
+    });
 
     if (existing) {
       return NextResponse.json({
-        message: 'Transaction already exists',
+        message: 'Transaction already exists (by ID)',
         transaction: existing
-      })
+      });
     }
 
-    // Check if this is a numeric internal code that should be preserved
-    const rawInternalCode = data.internalCode?.toString() || ''
-    const isNumericInternalCode = /^\d+$/.test(rawInternalCode.replace(/^0+/, ''))
-    const needsReview = isNumericInternalCode && !category
+    // Check if this is a special category
+    const normalizedInternalCode = internalCode.replace(/^0+/, '');
+    const is600 = normalizedInternalCode === '600';
+    const is23152 = normalizedInternalCode === '23152';
+    
+    // Only try to find a category if we explicitly have a categoryCode that's not a special code
+    let categoryId = null;
+    let category = null;
+    
+    if (data.categoryCode && data.categoryCode.startsWith('F') && !is600 && !is23152) {
+      // Try to find the category
+      category = await prisma.category.findUnique({
+        where: { code: data.categoryCode }
+      });
+      
+      if (category) {
+        categoryId = category.id;
+      } else if (data.categoryCode) {
+        logger.error(`Category not found: ${data.categoryCode}`);
+        return NextResponse.json(
+          { error: 'Category not found' },
+          { status: 400 }
+        );
+      }
+    }
     
     // Handle split transaction metadata
-    const isSplit = data.isSplit || false
-    const totalSplits = data.totalSplits || 1
-    const splitIndex = data.splitIndex || 0
-    const originalAmount = data.originalAmount || amount
+    const isSplit = data.isSplit || false;
+    const totalSplits = data.totalSplits || 1;
+    const splitIndex = data.splitIndex || 0;
+    const originalAmount = data.originalAmount || amount;
     
-    // Create transaction - now categoryId can be null
+    // Create transaction - categoryId can be null
     const transaction = await prisma.transaction.create({
       data: {
-        id: transactionId,
+        id: data.id,
         projectCode,
         year,
         amount,
@@ -173,7 +195,7 @@ export async function POST(request: Request) {
         accountLabel: data.accountLabel?.toString() || null,
         processed: false,
         status: data.status || 'unprocessed',
-        categoryId, // This can now be null
+        categoryId, // This can be null
         // Add split transaction fields
         isSplit,
         totalSplits,
@@ -181,20 +203,20 @@ export async function POST(request: Request) {
         originalAmount: isSplit ? originalAmount : null,
         metadata: {
           originalInternalCode: data.internalCode,
-          needsReview,
-          categoryCode: category?.code,
-          splitId: isSplit ? `${projectCode}-${year}-${documentNumber}` : null
+          needsReview: is600,
+          categoryCode: category?.code || data.categoryCode,
+          splitId: isSplit ? `${projectCode}-${year}-${documentNumber}` : null,
+          fingerprint: data.metadata?.fingerprint // Store the fingerprint for future matching
         }
       },
       include: {
-        category: true,
-        inquiries: true
+        category: true
       }
-    })
+    });
 
-    // Generate the response - for numeric internal codes without categories, 
-    // use the internal code directly as the categoryCode for display
-    const displayCategoryCode = category?.code || (isNumericInternalCode ? internalCode : null)
+    // Generate the response
+    const displayCategoryCode = category?.code || (data.categoryCode && data.categoryCode.startsWith('F')) ? 
+      data.categoryCode : (is600 || is23152) ? internalCode : null;
 
     return NextResponse.json({
       transaction: {
@@ -204,68 +226,12 @@ export async function POST(request: Request) {
         invoiceDate: transaction.invoiceDate?.toISOString() || null,
         amount: Number(transaction.amount.toFixed(2))
       }
-    })
+    });
   } catch (error) {
-    logger.error(`Error creating transaction: ${error}`)
+    logger.error(`Error creating transaction: ${error}`);
     return NextResponse.json(
       { error: 'Failed to create transaction' },
       { status: 500 }
-    )
-  }
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const data = await request.json()
-    
-    // If categoryCode is provided, find the category
-    let categoryId = data.categoryId
-    if (data.categoryCode && !categoryId && data.categoryCode.startsWith('F')) {
-      const category = await prisma.category.findUnique({
-        where: { code: data.categoryCode }
-      })
-      if (category) {
-        categoryId = category.id
-      }
-    }
-
-    // Update transaction - categoryId can now be null
-    const transaction = await prisma.transaction.update({
-      where: { id: params.id },
-      data: {
-        status: data.status,
-        categoryId: categoryId, // Can be undefined or null
-        processed: data.processed,
-        personReference: data.personReference,
-        details: data.details,
-        amount: data.amount ? Number(Number(data.amount).toFixed(2)) : undefined
-      },
-      include: {
-        category: true,
-        inquiries: true
-      }
-    })
-
-    // For numeric internal codes without categories, use the internal code directly
-    const displayCategoryCode = transaction.category?.code || transaction.internalCode
-
-    return NextResponse.json({
-      transaction: {
-        ...transaction,
-        categoryCode: displayCategoryCode,
-        bookingDate: transaction.bookingDate.toISOString(),
-        invoiceDate: transaction.invoiceDate?.toISOString() || null,
-        amount: Number(transaction.amount.toFixed(2))
-      }
-    })
-  } catch (error) {
-    logger.error(`Error updating transaction: ${error}`)
-    return NextResponse.json(
-      { error: 'Failed to update transaction' },
-      { status: 500 }
-    )
+    );
   }
 }

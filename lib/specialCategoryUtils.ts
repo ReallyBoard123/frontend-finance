@@ -40,6 +40,19 @@ export function isZuweisungTransaction(transaction: Transaction): boolean {
 }
 
 /**
+ * Generate a stable fingerprint for transaction matching across exports
+ */
+export function generateTransactionFingerprint(transaction: Transaction): string {
+  // Round amount to 2 decimal places to handle floating point issues
+  const amount = typeof transaction.amount === 'number' 
+    ? parseFloat(transaction.amount.toFixed(2))
+    : parseFloat(String(transaction.amount)).toFixed(2);
+  
+  // Combine stable properties to create a unique fingerprint
+  return `${transaction.projectCode}_${transaction.internalCode}_${amount}_${transaction.personReference || ''}`;
+}
+
+/**
  * Determines if a transaction should appear in missing entries
  */
 export function shouldAppearInMissingEntries(transaction: Transaction): boolean {

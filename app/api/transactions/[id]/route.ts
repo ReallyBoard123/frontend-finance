@@ -4,16 +4,16 @@ import prisma from '@/lib/prisma';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    // FIX: Make sure to await params - this was causing the error
-    const { id } = await params;
+    const { id } = await context.params;
     const data = await request.json();
     
     // Retrieve existing transaction
     const existingTransaction = await prisma.transaction.findUnique({
-      where: { id }
+      where: { id },
+      include: { category: true }
     });
     
     if (!existingTransaction) {
@@ -23,70 +23,77 @@ export async function PATCH(
       );
     }
 
-    // Check for special numeric codes that should have null categoryId
-    let categoryId = data.categoryId;
-    const categoryCode = data.categoryCode;
-    
-    // Normalize internal code and check if it's a special category
+    // Get current metadata
+    const existingMetadata = existingTransaction.metadata as Record<string, unknown> || {};
+
+    // Determine if this is a special category transaction
     const internalCode = existingTransaction.internalCode.replace(/^0+/, '');
-    const isSpecialCategory = internalCode === '600' || internalCode === '23152';
+    const isElvi = internalCode === '600';
+    const isZuweisung = internalCode === '23152';
+    const isSpecial = isElvi || isZuweisung;
     
-    // For special categories, only allow category assignment if explicitly changing status to completed
-    if (isSpecialCategory) {
-      if (data.status !== 'completed') {
-        categoryId = null;
+    // Handle special category assignments
+    let categoryId = data.categoryId;
+    
+    // For special categories, only allow category assignment under certain conditions
+    if (isSpecial) {
+      if (isElvi && data.status !== 'completed') {
+        categoryId = null; // Keep ELVI transactions uncategorized until completed
       }
     }
 
     // Save metadata with previous state and additional fields if provided
     const metadata = {
-      ...(existingTransaction.metadata as Record<string, unknown> || {}),
+      ...existingMetadata,
       previousState: data.previousState || {},
-      categoryCode: data.categoryCode,
-      categoryName: data.categoryName,
-      // Special handling for ELVI transactions (600)
-      needsReview: internalCode === '600' && data.status !== 'completed'
+      categoryCode: data.categoryCode || existingMetadata.categoryCode,
+      categoryName: data.categoryName || existingMetadata.categoryName,
+      // Keep the fingerprint from existing metadata if available
+      fingerprint: existingMetadata.fingerprint || null
     };
 
-    // Update the transaction with fields that exist in the Prisma schema
+    // Update the transaction with provided fields
     const updatedTransaction = await prisma.transaction.update({
       where: { id },
       data: {
         categoryId: categoryId, // This can be null
         status: data.status || existingTransaction.status,
+        amount: data.amount !== undefined ? data.amount : undefined,
+        description: data.description !== undefined ? data.description : undefined,
+        personReference: data.personReference !== undefined ? data.personReference : undefined,
+        details: data.details !== undefined ? data.details : undefined,
+        documentNumber: data.documentNumber !== undefined ? data.documentNumber : undefined,
+        requiresSpecialHandling: data.requiresSpecialHandling !== undefined ? data.requiresSpecialHandling : undefined,
         metadata: metadata
-      }
+      },
+      include: { category: true }
     });
 
     // Create a log entry for this change
-    if ((data.categoryId !== existingTransaction.categoryId) || 
-        (data.categoryCode && (existingTransaction.metadata as Record<string, unknown>)?.categoryCode !== data.categoryCode)) {
-      await prisma.transactionLog.create({
-        data: {
-          transactionId: id,
-          action: 'category_assigned',
-          previousState: data.previousState || {},
-          currentState: {
-            categoryId: data.categoryId,
-            categoryCode: data.categoryCode,
-            categoryName: data.categoryName
-          },
-          note: `Category changed from ${(existingTransaction.metadata as Record<string, unknown>)?.categoryCode || 'unassigned'} to ${data.categoryCode}`,
-          performedBy: 'user'
-        }
-      });
-    }
-
-    // Return the display categoryCode based on transaction type
-    const displayCategoryCode = isSpecialCategory ? 
-      (internalCode === '600' ? '600' : '23152') : 
-      (data.categoryCode || existingTransaction.internalCode);
-
-    return NextResponse.json({
-      ...updatedTransaction,
-      categoryCode: displayCategoryCode,
-      categoryName: data.categoryName
+    await prisma.transactionLog.create({
+      data: {
+        transactionId: id,
+        action: data.categoryId ? 'category_assigned' : 'status_updated',
+        previousState: data.previousState || {},
+        currentState: {
+          categoryId: data.categoryId,
+          categoryCode: data.categoryCode,
+          categoryName: data.categoryName,
+          status: data.status
+        },
+        note: `${data.categoryId ? 'Category changed' : 'Status updated'} from ${data.previousState?.status || 'unknown'} to ${data.status || updatedTransaction.status}`,
+        performedBy: 'user'
+      }
     });
+
+    // Format the response
+    const responseData = {
+      ...updatedTransaction,
+      categoryCode: updatedTransaction.category?.code || metadata.categoryCode,
+      categoryName: updatedTransaction.category?.name || metadata.categoryName
+    };
+
+    return NextResponse.json(responseData);
   } catch (error) {
     console.error('Error updating transaction:', error);
     return NextResponse.json(

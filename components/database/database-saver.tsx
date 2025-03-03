@@ -1,9 +1,11 @@
+// components/database/database-saver.tsx
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Save } from 'lucide-react';
 import { useFinanceStore } from '@/lib/store';
-import type { ProcessedData, Transaction } from '@/types/transactions';
+import type { ProcessedData, Transaction, TransactionUpdate } from '@/types/transactions';
 import { isElviTransaction, isZuweisungTransaction } from '@/lib/specialCategoryUtils';
+import { UpdateSummary } from '../costs/update-summary';
 
 interface DatabaseSaverProps {
   processedData: ProcessedData | null;
@@ -18,24 +20,29 @@ interface YearlyTotalCategory {
   transactions: Transaction[];
 }
 
-interface TransactionMetadata {
-  needsReview?: boolean;
-  originalInternalCode?: string;
-  categoryCode?: string | null;
-  splitId?: string | null;
+interface UpdateSummaryData {
+  newCount: number;
+  updatedCount: number;
+  unchangedCount: number;
+  errorCount: number;
+  details?: {
+    new: string[];
+    updated: string[];
+    unchanged: string[];
+    errors: string[];
+  };
 }
 
-export function generateTransactionId(transaction: Transaction, index: number = 0): string {
-  // Include the transaction's current ID if it already has one (which includes the index)
-  if (transaction.id && transaction.id.includes('-')) {
-    return transaction.id;
-  }
+// Generate a stable fingerprint for transaction matching across exports
+function generateTransactionFingerprint(transaction: Transaction): string {
+  // Round amount to 2 decimal places to handle floating point issues
+  const amount = typeof transaction.amount === 'number' 
+    ? parseFloat(transaction.amount.toFixed(2))
+    : parseFloat(String(transaction.amount)).toFixed(2);
   
-  // Otherwise generate a new ID with an index suffix
-  const docNumber = transaction.documentNumber || `NO_DOC_${Date.now()}`;
-  return `${transaction.projectCode}-${transaction.year}-${docNumber}-${index}`;
+  // Combine stable properties to create a unique fingerprint
+  return `${transaction.projectCode}_${transaction.internalCode}_${amount}_${transaction.personReference || ''}`;
 }
-
 
 function validateTransaction(transaction: Transaction): { isValid: boolean; missingFields: string[]; fixableFields: string[] } {
   const requiredFields = [
@@ -68,12 +75,9 @@ function validateTransaction(transaction: Transaction): { isValid: boolean; miss
 }
 
 function prepareTransactionData(transaction: Transaction, index: number = 0) {
-  // Normalize internal code
-  const normalizedInternalCode = transaction.internalCode.replace(/^0+/, '');
-  
-  // Check if it's a special category
-  const is600 = normalizedInternalCode === '600';
-  const is23152 = normalizedInternalCode === '23152';
+  // Use utility functions to check special transaction types
+  const is600 = isElviTransaction(transaction);
+  const is23152 = isZuweisungTransaction(transaction);
   
   // Generate a safe document number that won't have undefined
   const docNumber = transaction.documentNumber || `NODOC-${Date.now()}-${index}`;
@@ -82,6 +86,9 @@ function prepareTransactionData(transaction: Transaction, index: number = 0) {
   const safeId = transaction.id && !transaction.id.includes('undefined') 
     ? transaction.id 
     : `${transaction.projectCode}-${transaction.year}-${docNumber}-${index}`;
+  
+  // Generate the fingerprint for this transaction (for matching)
+  const fingerprint = generateTransactionFingerprint(transaction);
     
   return {
     ...transaction,
@@ -108,14 +115,15 @@ function prepareTransactionData(transaction: Transaction, index: number = 0) {
     metadata: {
       needsReview: is600,
       originalInternalCode: transaction.internalCode,
-      categoryCode: transaction.categoryCode
+      categoryCode: transaction.categoryCode,
+      fingerprint: fingerprint
     }
   };
 }
 
-
 export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: DatabaseSaverProps) {
   const [saving, setSaving] = useState(false);
+  const [updateSummary, setUpdateSummary] = useState<UpdateSummaryData | null>(null);
   const { setCosts, categories } = useFinanceStore();
 
   const calculateYearlyTotals = (transactions: Transaction[]) => {
@@ -160,19 +168,98 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
     return yearlyTotals;
   };
 
+  // Helper function to compare transactions and determine what needs updating
+  const compareTransactions = (newTransaction: any, existingTransaction: any): Partial<TransactionUpdate> => {
+    const updates: Partial<TransactionUpdate> = {};
+    
+    // Create temporary transaction objects to use with the utility functions
+    const newTx = { ...newTransaction, internalCode: newTransaction.internalCode || '' } as Transaction;
+    const existingTx = { ...existingTransaction, internalCode: existingTransaction.internalCode || '' } as Transaction;
+    
+    // Check if the transaction is/was an ELVI transaction (600)
+    const wasElvi = isElviTransaction(existingTx);
+    const isStillElvi = isElviTransaction(newTx);
+    
+    // If transaction was ELVI but now has a proper category, update it
+    if (wasElvi && !isStillElvi && newTransaction.categoryCode) {
+      updates.categoryId = newTransaction.categoryId;
+      updates.categoryCode = newTransaction.categoryCode;
+      updates.status = 'completed';
+    }
+    
+    // For normal transactions, check for key field changes
+    if (!wasElvi || isStillElvi) {
+      // Fields to compare for changes
+      const compareFields = [
+        'amount', 'description', 'categoryCode', 'status', 
+        'documentNumber', 'personReference', 'details'
+      ];
+      
+      compareFields.forEach(field => {
+        // Skip nullish values in new transaction
+        if (newTransaction[field] === null || newTransaction[field] === undefined) {
+          return;
+        }
+        
+        // If field differs, add to updates
+        if (String(newTransaction[field]) !== String(existingTransaction[field])) {
+          updates[field as keyof TransactionUpdate] = newTransaction[field];
+        }
+      });
+    }
+    
+    // Check for status changes - especially important for previously unprocessed transactions
+    if (existingTransaction.status === 'unprocessed' && 
+        newTransaction.status && 
+        newTransaction.status !== 'unprocessed') {
+      updates.status = newTransaction.status;
+    }
+    
+    // Check for 23152 special transactions - these may need special handling
+    if (isZuweisungTransaction(newTx) || isZuweisungTransaction(existingTx)) {
+      // If transaction is now 23152, mark it as special
+      if (isZuweisungTransaction(newTx) && !existingTransaction.requiresSpecialHandling) {
+        updates.requiresSpecialHandling = true;
+      }
+    }
+    
+    return updates;
+  };
+
+  const handleCloseSummary = () => {
+    setUpdateSummary(null);
+  };
+
   const handleSave = async () => {
     if (!processedData || !isVerified || saving) return;
 
     setSaving(true);
     let successCount = 0;
-    let errorCount = 0;
+    let updateCount = 0;
     let skippedCount = 0;
+    let errorCount = 0;
+    
+    const summary = {
+      new: [] as string[],
+      updated: [] as string[],
+      unchanged: [] as string[],
+      errors: [] as string[]
+    };
 
     try {
+      // First check if this is a first import (no existing transactions in DB)
+      const existingCountResponse = await fetch('/api/transactions/count');
+      const { count: existingCount } = await existingCountResponse.json();
+      const isFirstImport = existingCount === 0;
+      
+      // Get all transactions to process
       const allTransactions = [
         ...processedData.transactions,
         ...processedData.specialTransactions
       ];
+
+      // Track processed fingerprints to prevent deduplication within the batch
+      const processedFingerprints = new Set<string>();
 
       // Group transactions by document number to identify splits
       const transactionsByDoc = allTransactions.reduce((acc, transaction) => {
@@ -195,12 +282,14 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
 
           if (!isValid && !hasFixableFieldsOnly) {
             errorCount++;
+            summary.errors.push(`Invalid transaction: ${transaction.id}`);
             continue;
           }
 
           try {
             // Use the index when preparing the data
             const preparedData = prepareTransactionData(transaction, i);
+            const fingerprint = generateTransactionFingerprint(transaction);
             
             // Set split-related fields if this is part of a split transaction
             if (isSplit) {
@@ -215,27 +304,109 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
               }
             }
 
-            const checkResponse = await fetch(`/api/transactions/check/${preparedData.id}`);
-            const { found } = await checkResponse.json();
+            // For first import OR if we haven't seen this fingerprint in this batch yet
+            if (isFirstImport || !processedFingerprints.has(fingerprint)) {
+              // Add to processed fingerprints to prevent duplicates in this batch
+              processedFingerprints.add(fingerprint);
+              
+              // If it's first import, don't bother checking for existing transactions
+              if (isFirstImport) {
+                // Create new transaction directly without checking
+                const response = await fetch('/api/transactions', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    ...preparedData,
+                    metadata: {
+                      ...preparedData.metadata,
+                      fingerprint: fingerprint,
+                      isFirstImport: true  // Flag to prevent duplicate checking on the server
+                    }
+                  })
+                });
 
-            if (found) {
+                if (!response.ok) {
+                  throw new Error(await response.text());
+                }
+
+                successCount++;
+                summary.new.push(`${preparedData.id} (${preparedData.internalCode})`);
+              } else {
+                // Not first import, check for existing transactions by fingerprint
+                const checkResponse = await fetch(`/api/transactions/check-fingerprint`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    id: preparedData.id,
+                    fingerprint: fingerprint
+                  })
+                });
+                
+                const checkResult = await checkResponse.json();
+                
+                if (checkResult.found) {
+                  // Transaction exists - check for updates needed
+                  const existingTransaction = checkResult.details;
+                  const updates = compareTransactions(preparedData, existingTransaction);
+                  
+                  if (Object.keys(updates).length > 0) {
+                    // There are differences - update the transaction
+                    const response = await fetch(`/api/transactions/${existingTransaction.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        ...updates,
+                        previousState: {
+                          categoryCode: existingTransaction.categoryCode,
+                          status: existingTransaction.status
+                        }
+                      })
+                    });
+
+                    if (!response.ok) {
+                      throw new Error(await response.text());
+                    }
+                    
+                    updateCount++;
+                    summary.updated.push(
+                      `${preparedData.id} (${preparedData.internalCode}): ${Object.keys(updates).join(', ')}`
+                    );
+                  } else {
+                    // No differences - skip
+                    skippedCount++;
+                    summary.unchanged.push(preparedData.id);
+                  }
+                } else {
+                  // Transaction doesn't exist - create new
+                  const response = await fetch('/api/transactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      ...preparedData,
+                      metadata: {
+                        ...preparedData.metadata,
+                        fingerprint: fingerprint
+                      }
+                    })
+                  });
+
+                  if (!response.ok) {
+                    throw new Error(await response.text());
+                  }
+
+                  successCount++;
+                  summary.new.push(`${preparedData.id} (${preparedData.internalCode})`);
+                }
+              }
+            } else {
+              // Skip this transaction as we've already processed one with the same fingerprint in this batch
               skippedCount++;
-              continue;
+              summary.unchanged.push(`${preparedData.id} (duplicate within import batch)`);
             }
-
-            const response = await fetch('/api/transactions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(preparedData)
-            });
-
-            if (!response.ok) {
-              throw new Error(await response.text());
-            }
-
-            successCount++;
-          } catch {
+          } catch (error) {
+            console.error('Error processing transaction:', error);
             errorCount++;
+            summary.errors.push(`Error with ${transaction.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
 
           // Add small delay to prevent overwhelming the server
@@ -262,7 +433,22 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
       };
 
       setCosts(newData);
-      onSaveComplete(`Processed: ${successCount} saved, ${skippedCount} skipped, ${errorCount} failed`);
+      
+      // Set update summary
+      setUpdateSummary({
+        newCount: successCount,
+        updatedCount: updateCount,
+        unchangedCount: skippedCount,
+        errorCount: errorCount,
+        details: {
+          new: summary.new,
+          updated: summary.updated,
+          unchanged: summary.unchanged,
+          errors: summary.errors
+        }
+      });
+      
+      onSaveComplete(`Processed: ${successCount} new, ${updateCount} updated, ${skippedCount} unchanged, ${errorCount} failed`);
     } catch (error) {
       onSaveComplete(`Save process failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
@@ -271,14 +457,23 @@ export function DatabaseSaver({ processedData, isVerified, onSaveComplete }: Dat
   };
 
   return (
-    <Button 
-      onClick={handleSave} 
-      disabled={!processedData || !isVerified || saving}
-      variant="secondary"
-      className={`${isVerified ? 'bg-green-500 text-white hover:bg-green-700' : ''}`}
-    >
-      <Save className="h-4 w-4 mr-2" />
-      {saving ? 'Saving...' : 'Save to Database'}
-    </Button>
+    <>
+      <Button 
+        onClick={handleSave} 
+        disabled={!processedData || !isVerified || saving}
+        variant="secondary"
+        className={`${isVerified ? 'bg-green-500 text-white hover:bg-green-700' : ''}`}
+      >
+        <Save className="h-4 w-4 mr-2" />
+        {saving ? 'Processing...' : 'Save to Database'}
+      </Button>
+      
+      {updateSummary && (
+        <UpdateSummary 
+          summary={updateSummary} 
+          onClose={handleCloseSummary} 
+        />
+      )}
+    </>
   );
 }

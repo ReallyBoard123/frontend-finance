@@ -28,7 +28,7 @@ export interface Transaction {
   isSplit?: boolean;
   totalSplits?: number;
   originalAmount?: number;
-  metadata?: Record<string, any>;
+  metadata?: TransactionMetadata;
 }
 
 export type TransactionStatus = 'pending' | 'completed' | 'unprocessed' | 'pending_inquiry';
@@ -50,6 +50,18 @@ export interface TransactionUpdate {
   categoryName?: string;
   previousState?: TransactionPreviousState | null;
   requiresSpecialHandling?: boolean;
+  amount?: number;
+  description?: string;
+  personReference?: string;
+  details?: string;
+}
+
+export interface TransactionMetadata {
+  needsReview?: boolean;
+  originalInternalCode?: string;
+  categoryCode?: string | null;
+  splitId?: string | null;
+  fingerprint?: string; // Used for matching transactions across exports
 }
 
 export interface CategoryTotal {
@@ -70,14 +82,4 @@ export interface ProcessedData {
   transactions: Transaction[];
   yearlyTotals: YearlyTotals;
   specialTransactions: Transaction[];
-}
-
-export interface TransactionInquiry {
-  id: string;
-  transactionId: string;
-  transaction: Transaction;
-  note: string;
-  status: 'pending' | 'resolved' | 'rejected';
-  createdAt: string | Date;
-  updatedAt: string | Date;
 }
