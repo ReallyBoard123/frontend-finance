@@ -14,12 +14,14 @@ interface CostsTabsProps {
   processedData: ProcessedData;
   categories: Category[];
   onTransactionUpdate: (transactionId: string, updates: TransactionUpdate) => void;
+  showVerticalTotals?: boolean; // New prop for showing vertical totals
 }
 
 export function CostsTabs({ 
   processedData, 
   categories, 
-  onTransactionUpdate 
+  onTransactionUpdate,
+  showVerticalTotals = false // Default to false to prioritize horizontal totals
 }: CostsTabsProps) {
   return (
     <Tabs defaultValue="summary" className="w-full">
@@ -36,6 +38,7 @@ export function CostsTabs({
           <CostsSummary 
             categories={categories}
             yearlyTotals={processedData.yearlyTotals}
+            showVerticalTotals={showVerticalTotals} // Pass the prop
           />
           <div className="mt-6">
             <SpecialCategorySummary

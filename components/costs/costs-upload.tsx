@@ -305,15 +305,16 @@ export function CostsUpload() {
           />
         )}
 
-        {processedData && !showConfirmation && (
-          <div className="mt-4">
-            <CostsTabs 
-              processedData={processedData}
-              categories={categories}
-              onTransactionUpdate={handleTransactionUpdate}
-            />
-          </div>
-        )}
+{processedData && !showConfirmation && (
+  <div className="mt-4">
+    <CostsTabs 
+      processedData={processedData}
+      categories={categories}
+      onTransactionUpdate={handleTransactionUpdate}
+      showVerticalTotals={false} // Set to false to prioritize horizontal totals
+    />
+  </div>
+)}
       </CardContent>
     </Card>
   );

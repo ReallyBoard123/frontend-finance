@@ -19,6 +19,7 @@ interface CostsSummaryProps {
   onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void;
   isInspectMode?: boolean;
   years?: string[];
+  showVerticalTotals?: boolean; // New prop to control vertical totals visibility
 }
 
 export function CostsSummary({ 
@@ -26,7 +27,8 @@ export function CostsSummary({
   yearlyTotals, 
   onCellClick, 
   isInspectMode = false,
-  years = ['2023', '2024', '2025']
+  years = ['2023', '2024', '2025'],
+  showVerticalTotals = false // Default to hide vertical totals
 }: CostsSummaryProps) {
   const {
     filter, 
@@ -92,6 +94,20 @@ export function CostsSummary({
     );
   };
 
+  // New function to calculate total budget across all years for a category
+  const calculateTotalBudgetAllYears = (categoryId: string): number => {
+    return years.reduce((sum, year) => {
+      return sum + calculateTotalBudget(categoryId, year);
+    }, 0);
+  };
+
+  // New function to calculate total spent across all years for a category
+  const calculateTotalSpentAllYears = (categoryId: string): number => {
+    return years.reduce((sum, year) => {
+      return sum + calculateTotalSpent(categoryId, year);
+    }, 0);
+  };
+
   const getFilteredCategories = (parentId: string | null) => {
     let filtered = categories.filter(category => category.parentId === parentId);
     
@@ -127,6 +143,14 @@ export function CostsSummary({
     }, {} as Record<string, { budget: number, spent: number }>);
   }, [years, getFilteredCategories, calculateTotalBudget, calculateTotalSpent]);
 
+  // Calculate overall totals
+  const overallTotals = React.useMemo(() => {
+    return {
+      totalBudget: years.reduce((sum, year) => sum + (totalsByYear[year]?.budget || 0), 0),
+      totalSpent: years.reduce((sum, year) => sum + (totalsByYear[year]?.spent || 0), 0)
+    };
+  }, [totalsByYear, years]);
+
   const hasFilteredResults = getFilteredCategories(null).length > 0;
 
   const renderCategory = (category: Category, level: number) => {
@@ -142,6 +166,11 @@ export function CostsSummary({
       ${category.color ? `bg-[${category.color}]` : ''}
       hover:bg-gray-50
     `;
+
+    // Calculate horizontal totals for this category
+    const totalBudget = calculateTotalBudgetAllYears(category.id);
+    const totalSpent = calculateTotalSpentAllYears(category.id);
+    const totalRemaining = totalBudget - totalSpent;
 
     return (
       <React.Fragment key={category.id}>
@@ -193,6 +222,19 @@ export function CostsSummary({
               </React.Fragment>
             );
           })}
+          
+          {/* New horizontal total columns */}
+          <td className="px-4 py-2 text-right font-bold">
+            {totalBudget.toLocaleString('de-DE')} €
+          </td>
+          <td className="px-4 py-2 text-right font-bold">
+            {totalSpent.toLocaleString('de-DE')} €
+          </td>
+          <td className={`px-4 py-2 text-right font-bold ${
+            totalRemaining < 0 ? 'text-red-600' : 'text-green-600'
+          }`}>
+            {totalRemaining.toLocaleString('de-DE')} €
+          </td>
         </tr>
         {isExpanded && children.map(child => renderCategory(child, level + 1))}
       </React.Fragment>
@@ -255,6 +297,10 @@ export function CostsSummary({
                     <th className="px-4 py-2 text-right">Remaining</th>
                   </React.Fragment>
                 ))}
+                {/* New horizontal total columns header */}
+                <th className="px-4 py-2 text-right bg-blue-50">Total Budget</th>
+                <th className="px-4 py-2 text-right bg-blue-50">Total Spent</th>
+                <th className="px-4 py-2 text-right bg-blue-50">Total Remaining</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -262,34 +308,48 @@ export function CostsSummary({
                 renderCategory(category, 0)
               )}
             </tbody>
-            <tfoot className="bg-gray-100 font-bold">
-              <tr>
-                <td className="px-4 py-2" colSpan={2}>Total</td>
-                {years.map(year => {
-                  const yearTotal = totalsByYear[year];
-                  const remaining = yearTotal.budget - yearTotal.spent;
-                  return (
-                    <React.Fragment key={year}>
-                      <td className="px-4 py-2 text-right">
-                        {yearTotal.budget.toLocaleString('de-DE')} €
-                      </td>
-                      <CostCell 
-                        amount={yearTotal.spent}
-                        onCellClick={onCellClick}
-                        isInspectMode={isInspectMode}
-                        year={parseInt(year)}
-                        categoryCode="total"
-                      />
-                      <td className={`px-4 py-2 text-right ${
-                        remaining < 0 ? 'text-red-600' : 'text-green-600'
-                      }`}>
-                        {remaining.toLocaleString('de-DE')} €
-                      </td>
-                    </React.Fragment>
-                  );
-                })}
-              </tr>
-            </tfoot>
+            {showVerticalTotals && (
+              <tfoot className="bg-gray-100 font-bold">
+                <tr>
+                  <td className="px-4 py-2" colSpan={2}>Total</td>
+                  {years.map(year => {
+                    const yearTotal = totalsByYear[year];
+                    const remaining = yearTotal.budget - yearTotal.spent;
+                    return (
+                      <React.Fragment key={year}>
+                        <td className="px-4 py-2 text-right">
+                          {yearTotal.budget.toLocaleString('de-DE')} €
+                        </td>
+                        <CostCell 
+                          amount={yearTotal.spent}
+                          onCellClick={onCellClick}
+                          isInspectMode={isInspectMode}
+                          year={parseInt(year)}
+                          categoryCode="total"
+                        />
+                        <td className={`px-4 py-2 text-right ${
+                          remaining < 0 ? 'text-red-600' : 'text-green-600'
+                        }`}>
+                          {remaining.toLocaleString('de-DE')} €
+                        </td>
+                      </React.Fragment>
+                    );
+                  })}
+                  {/* Add overall totals */}
+                  <td className="px-4 py-2 text-right bg-blue-50">
+                    {overallTotals.totalBudget.toLocaleString('de-DE')} €
+                  </td>
+                  <td className="px-4 py-2 text-right bg-blue-50">
+                    {overallTotals.totalSpent.toLocaleString('de-DE')} €
+                  </td>
+                  <td className={`px-4 py-2 text-right bg-blue-50 ${
+                    overallTotals.totalBudget - overallTotals.totalSpent < 0 ? 'text-red-600' : 'text-green-600'
+                  }`}>
+                    {(overallTotals.totalBudget - overallTotals.totalSpent).toLocaleString('de-DE')} €
+                  </td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
