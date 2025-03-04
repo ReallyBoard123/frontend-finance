@@ -4,8 +4,9 @@ import { Input } from "@/components/ui/input";
 import { CostVerification } from './cost-verification';
 import { DatabaseSaver } from '../database/database-saver';
 import { DbExport } from '../database/db-export';
-import type { ProcessedData } from '@/types/transactions';
+import type { ProcessedData, Transaction } from '@/types/transactions';
 import type { Category } from '@/types/budget';
+import ResetStoreButton from '../common/reset-store';
 
 interface UploadControlsProps {
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -14,6 +15,7 @@ interface UploadControlsProps {
   isVerified: boolean;
   onVerificationComplete: (isValid: boolean, message: string) => void;
   onSaveComplete: (message: string) => void;
+  selectedNewTransactions?: Transaction[];
 }
 
 export function UploadControls({
@@ -43,6 +45,7 @@ export function UploadControls({
         onSaveComplete={onSaveComplete}
       />
       <DbExport hasData={processedData !== null} />
+      <ResetStoreButton />
     </div>
   );
 }

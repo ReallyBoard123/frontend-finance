@@ -14,6 +14,9 @@ interface StoreState {
   isLoading: Record<string, boolean>;
   error: Record<string, string | undefined>;
   isHydrated: boolean;
+  
+  // Flag to track DB resets
+  lastDbCheck: number; // Timestamp of last DB check
 }
 
 interface StoreActions {
@@ -27,6 +30,7 @@ interface StoreActions {
   setLoading: (key: string, value: boolean) => void;
   setError: (key: string, error: string | undefined) => void;
   setHydrated: (value: boolean) => void;
+  setLastDbCheck: (timestamp: number) => void;
   reset: () => void;
 }
 
@@ -39,6 +43,7 @@ const initialState: StoreState = {
   isLoading: {},
   error: {},
   isHydrated: false,
+  lastDbCheck: 0
 };
 
 export const useFinanceStore = create<FinanceStore>()(
@@ -50,6 +55,9 @@ export const useFinanceStore = create<FinanceStore>()(
       setCategories: (categories) => set({ categories }),
       setCosts: (costs) => set({ costs }),
       setInquiries: (inquiries) => set({ inquiries: Array.isArray(inquiries) ? inquiries : [] }),
+      
+      // Update the timestamp of last DB check
+      setLastDbCheck: (timestamp) => set({ lastDbCheck: timestamp }),
       
       // Update a single transaction in the store
       updateTransaction: (id, updates) => set((state) => {
@@ -79,6 +87,7 @@ export const useFinanceStore = create<FinanceStore>()(
       
       setHydrated: (value) => set({ isHydrated: value }),
       
+      // Reset the entire store to initial state
       reset: () => set(initialState),
     }),
     {
@@ -88,6 +97,7 @@ export const useFinanceStore = create<FinanceStore>()(
         categories: state.categories,
         costs: state.costs,
         inquiries: state.inquiries,
+        lastDbCheck: state.lastDbCheck,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

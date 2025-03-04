@@ -6,11 +6,12 @@ import { useTransactionOperations } from '@/lib/hooks/useTransactionOperations';
 import { AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { UploadControls } from './upload-controls';
+import { NewTransactionsConfirmation } from './new-transactions-confirmation';
 
 import type { ProcessedData, Transaction, TransactionUpdate } from '@/types/transactions';
 import { CostsTabs } from './costs-tabs';
 import { Category } from '@/types/budget';
-import { SpecialCategoryHandler } from './handlers/special-category-handler';
+
 
 interface TransactionRow {
   'Jahr': string | number;
@@ -38,9 +39,14 @@ export function CostsUpload() {
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isVerified, setIsVerified] = useState(false);
   const [initialFetchDone, setInitialFetchDone] = useState(false);
+  const [newTransactions, setNewTransactions] = useState<Transaction[]>([]);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  // Store only the new transactions separately
+  const [selectedNewTransactions, setSelectedNewTransactions] = useState<Transaction[]>([]);
   
   const { 
     categories, 
+    costs,
     setCosts, 
     setInquiries 
   } = useFinanceStore();
@@ -53,7 +59,7 @@ export function CostsUpload() {
     const fetchTransactions = async () => {
       // Prevent multiple fetches
       if (initialFetchDone) return;
-
+    
       try {
         const [regularRes, specialRes, inquiriesRes] = await Promise.all([
           fetch('/api/transactions?type=regular'),
@@ -66,24 +72,35 @@ export function CostsUpload() {
           specialRes.json(),
           inquiriesRes.json()
         ]);
-  
+    
+        // Store the current timestamp as last DB check
+        const now = Date.now();
         setInquiries(inquiries);
-
+    
         const regularTransactions = regular.transactions || [];
         const specialTransactions = special.transactions || [];
-
-        if (regularTransactions.length || specialTransactions.length) {
+    
+        // If the database has no transactions, make sure to clear the store
+        if (regularTransactions.length === 0 && specialTransactions.length === 0) {
+          setCosts({
+            transactions: [],
+            specialTransactions: [],
+            yearlyTotals: {}
+          });
+          console.log("Database is empty - cleared local store");
+        } else {
           const data = {
             transactions: regularTransactions,
             specialTransactions: specialTransactions,
             yearlyTotals: calculateYearlyTotals(regularTransactions, categories)
           };
-          setProcessedData(data);
           setCosts(data);
-          setIsVerified(true);
-          setUploadStatus('Loaded existing transactions from database');
         }
-
+        
+        setProcessedData(costs);
+        setIsVerified(true);
+        setUploadStatus('Loaded existing transactions from database');
+    
         // Mark initial fetch as complete
         setInitialFetchDone(true);
       } catch (error) {
@@ -96,6 +113,52 @@ export function CostsUpload() {
 
     fetchTransactions();
   }, [categories, setCosts, setInquiries, calculateYearlyTotals, initialFetchDone]);
+
+  const identifyNewTransactions = async (uploadedTransactions: Transaction[]) => {
+    try {
+      // Check which transactions already exist in the database
+      const response = await fetch('/api/transactions/check-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions: uploadedTransactions })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to check transactions');
+      }
+      
+      const { existingIds, newTransactions, matchedInquiries } = await response.json();
+      
+      // Process matched inquiries if any
+      if (matchedInquiries && matchedInquiries.length > 0) {
+        console.log('Found transactions with existing inquiries:', matchedInquiries.length);
+        
+        // Update transaction statuses for matched inquiries
+        for (const match of matchedInquiries) {
+          const transactionIndex = uploadedTransactions.findIndex(t => t.id === match.newId);
+          if (transactionIndex >= 0) {
+            // Preserve inquiry status
+            uploadedTransactions[transactionIndex].status = match.originalTransaction.status || 'pending_inquiry';
+            console.log(`Updated status for transaction ${match.newId} to ${uploadedTransactions[transactionIndex].status}`);
+          }
+        }
+      }
+      
+      // Set new transactions for confirmation
+      setNewTransactions(newTransactions);
+      setShowConfirmation(newTransactions.length > 0);
+      
+      setUploadStatus(
+        `Found ${newTransactions.length} new transactions out of ${uploadedTransactions.length} total`
+      );
+      
+      return newTransactions;
+    } catch (error) {
+      console.error('Error identifying new transactions:', error);
+      setUploadStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return [];
+    }
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -115,17 +178,55 @@ export function CostsUpload() {
       }) as TransactionRow[];
       
       const data = processTransactions(rows, categories);
-      setProcessedData(data);
-      setCosts(data);
-   
-      setUploadStatus(
-        `Processed ${data.transactions.length + data.specialTransactions.length} transactions ` +
-        `(${data.specialTransactions.length} special transactions).`
-      );
+      
+      // Identify only the new transactions
+      await identifyNewTransactions([...data.transactions, ...data.specialTransactions]);
+      
+      // Don't update processedData here - we'll do that after user selects transactions
     } catch (error) {
       console.error('File processing error:', error);
       setUploadStatus(`Error processing file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  };
+
+  const handleConfirmNewTransactions = (selectedTransactions: Transaction[]) => {
+    // Store only the selected new transactions for saving to database later
+    setSelectedNewTransactions(selectedTransactions);
+    
+    // Create a data object that includes BOTH existing transactions AND the new ones
+    const updatedData: ProcessedData = {
+      // For regular transactions, merge existing with new non-special ones
+      transactions: [
+        ...(costs?.transactions || []),
+        ...selectedTransactions.filter(t => !t.requiresSpecialHandling)
+      ],
+      // For special transactions, merge existing with new special ones
+      specialTransactions: [
+        ...(costs?.specialTransactions || []),
+        ...selectedTransactions.filter(t => t.requiresSpecialHandling)
+      ],
+      // Calculate totals based on all transactions
+      yearlyTotals: {} // We'll calculate this below
+    };
+    
+    // Calculate yearly totals with all transactions
+    updatedData.yearlyTotals = calculateYearlyTotals(updatedData.transactions, categories);
+    
+    // Update state
+    setProcessedData(updatedData);
+    setCosts(updatedData);
+    setIsVerified(true);
+    setShowConfirmation(false);
+    
+    setUploadStatus(
+      `Added ${selectedTransactions.length} new transactions. Click "Verify Data" then "Save to Database".`
+    );
+  };
+
+  const handleCancelNewTransactions = () => {
+    setShowConfirmation(false);
+    setNewTransactions([]);
+    setSelectedNewTransactions([]);
   };
 
   const handleVerificationComplete = (isValid: boolean, message: string) => {
@@ -135,6 +236,7 @@ export function CostsUpload() {
 
   const handleSaveComplete = (message: string) => {
     setUploadStatus(message);
+    setSelectedNewTransactions([]);
   };
 
   const handleTransactionUpdate = async (transactionId: string, updates: TransactionUpdate) => {
@@ -183,6 +285,8 @@ export function CostsUpload() {
           isVerified={isVerified}
           onVerificationComplete={handleVerificationComplete}
           onSaveComplete={handleSaveComplete}
+          // Pass only the selected new transactions to save
+          selectedNewTransactions={selectedNewTransactions}
         />
 
         {uploadStatus && (
@@ -192,21 +296,29 @@ export function CostsUpload() {
           </Alert>
         )}
 
-      {processedData && (
-        <div className="mt-4">
-          <CostsTabs 
-            processedData={processedData}
+        {showConfirmation && (
+          <NewTransactionsConfirmation
+            newTransactions={newTransactions}
             categories={categories}
-            onTransactionUpdate={handleTransactionUpdate}
+            onConfirm={handleConfirmNewTransactions}
+            onCancel={handleCancelNewTransactions}
           />
-        </div>
+        )}
+
+        {processedData && !showConfirmation && (
+          <div className="mt-4">
+            <CostsTabs 
+              processedData={processedData}
+              categories={categories}
+              onTransactionUpdate={handleTransactionUpdate}
+            />
+          </div>
         )}
       </CardContent>
     </Card>
   );
 }
 
-// Update this function in your costs-upload.tsx file
 function processTransactions(rows: TransactionRow[], categories: Category[]): ProcessedData {
   const transactions = rows
     .filter((row) => row['Jahr'] && row['Betrag'])
@@ -232,9 +344,32 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
       const parentCategory = matchingCategory?.parentId ? 
         categories.find(c => c.id === matchingCategory.parentId) : null;
 
-      // Make a valid transaction ID that doesn't have undefined
-      const docNumber = row['BelegNr (BelegNr)']?.toString() || `NODOC-${Date.now()}-${index}`;
-      const uniqueId = `${row['Projekt (KTR)']}-${row['Jahr']}-${docNumber}-${index}`;
+      // Ensure document number is unique but stable
+      const docNumber = row['BelegNr (BelegNr)']?.toString() || '';
+      let stableDocNumber;
+      
+      // Generate document number based on type
+      if (transactionType === 'IVMC-Hochr.') {
+        // For IVMC entries, use the reference (e.g., "Gar", "Sin")
+        const ref = row['Grund1 (Grund1)']?.toString() || '';
+        stableDocNumber = `NODOC-${ref || index}`;
+      } else if (docNumber) {
+        // Use actual document number if available
+        stableDocNumber = docNumber;
+      } else {
+        // For entries without document number, use reference or index
+        const ref = row['Grund1 (Grund1)']?.toString() || '';
+        stableDocNumber = `NODOC-${ref || index}`;
+      }
+      
+      // IMPORTANT: Always include the index to ensure uniqueness
+      const uniqueId = `${row['Projekt (KTR)']}-${row['Jahr']}-${stableDocNumber}-${index}`;
+
+      // Format date consistently
+      const bookingDate = row['BuchDat (Buch_Dat)'] || row['Erstellungsdatum'] || new Date();
+      const formattedBookingDate = bookingDate instanceof Date ? 
+                                  bookingDate : 
+                                  new Date(bookingDate);
 
       const transaction: Transaction = {
         id: uniqueId,
@@ -245,8 +380,8 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
         description: row['Bezeichnung (Konto_Bez)']?.toString() || '',
         costGroup: row['Kontengruppe (KoArt_GR)']?.toString() || '',
         transactionType: transactionType?.toString() || '',
-        documentNumber: docNumber,
-        bookingDate: new Date(row['BuchDat (Buch_Dat)'] || row['Erstellungsdatum'] || new Date()),
+        documentNumber: stableDocNumber,
+        bookingDate: formattedBookingDate,
         personReference: row['Grund1 (Grund1)']?.toString() || '',
         details: row['Grund2 (Grund2)']?.toString() || '',
         invoiceDate: row['RechDat (Rech_dat)'] ? new Date(row['RechDat (Rech_dat)']) : null,
@@ -255,14 +390,14 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
         internalAccount: row['koa (koa)']?.toString() || '',
         accountLabel: row['koa-Bezeichnung (koa_Bez)']?.toString() || '',
         categoryId: matchingCategory?.id || null,
-        categoryCode: matchingCategory?.code || null, // Don't use internalCode as categoryCode for special cases
+        categoryCode: matchingCategory?.code || null,
         categoryName: matchingCategory?.name,
         requiresSpecialHandling,
         categoryParentCode: parentCategory?.code,
         categoryParentId: parentCategory?.id,
         status: is600 ? 'unprocessed' : 'unprocessed',
         metadata: {
-          needsReview: is600, // Mark 600 transactions as needing review
+          needsReview: is600,
           originalInternalCode: internalCode
         }
       };
