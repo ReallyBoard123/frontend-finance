@@ -31,6 +31,8 @@ interface StoreActions {
   setError: (key: string, error: string | undefined) => void;
   setHydrated: (value: boolean) => void;
   setLastDbCheck: (timestamp: number) => void;
+  
+  // Full reset
   reset: () => void;
 }
 
@@ -48,7 +50,7 @@ const initialState: StoreState = {
 
 export const useFinanceStore = create<FinanceStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...initialState,
 
       // Basic setters
@@ -88,16 +90,20 @@ export const useFinanceStore = create<FinanceStore>()(
       setHydrated: (value) => set({ isHydrated: value }),
       
       // Reset the entire store to initial state
-      reset: () => set(initialState),
+      reset: () => {
+        // Clear localStorage persistence
+        localStorage.removeItem('finance-store');
+        // Reset state to initial
+        set(initialState);
+      },
     }),
     {
       name: 'finance-store',
       storage: createJSONStorage(() => localStorage),
+      // Only persist these keys to avoid issues with stale data
       partialize: (state) => ({
-        categories: state.categories,
-        costs: state.costs,
-        inquiries: state.inquiries,
         lastDbCheck: state.lastDbCheck,
+        isHydrated: state.isHydrated
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

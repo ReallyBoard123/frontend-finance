@@ -31,7 +31,7 @@ export interface Transaction {
   metadata?: Record<string, any>;
 }
 
-export type TransactionStatus = 'pending' | 'completed' | 'unprocessed' | 'pending_inquiry';
+export type TransactionStatus = 'unprocessed' | 'pending' | 'completed' | 'processed' | 'pending_inquiry' | 'missing';
 
 export interface TransactionPreviousState {
   status?: TransactionStatus;

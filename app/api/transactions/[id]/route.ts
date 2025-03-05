@@ -33,7 +33,7 @@ export async function PATCH(
     
     // For special categories, only allow category assignment if explicitly changing status to completed
     if (isSpecialCategory) {
-      if (data.status !== 'completed') {
+      if (data.status !== 'processed') {
         categoryId = null;
       }
     }
@@ -45,15 +45,23 @@ export async function PATCH(
       categoryCode: data.categoryCode,
       categoryName: data.categoryName,
       // Special handling for ELVI transactions (600)
-      needsReview: internalCode === '600' && data.status !== 'completed'
+      needsReview: internalCode === '600' && data.status !== 'processed'
     };
+    
+    // Update status values - convert legacy status values to new ones
+    let status = data.status;
+    if (status === 'completed') {
+      status = 'processed';
+    } else if (status === 'unprocessed' && !categoryId) {
+      status = 'missing';
+    }
 
     // Update the transaction with fields that exist in the Prisma schema
     const updatedTransaction = await prisma.transaction.update({
       where: { id },
       data: {
         categoryId: categoryId, // This can be null
-        status: data.status || existingTransaction.status,
+        status: status || existingTransaction.status,
         metadata: metadata
       }
     });

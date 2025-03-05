@@ -15,7 +15,24 @@ export function useTransactionOperations() {
       if (!response.ok) throw new Error('Failed to fetch transactions');
       
       const data = await response.json();
-      return data.transactions || [];
+      const transactions = data.transactions || [];
+      
+      // Update the store with fetched data
+      if (transactions.length > 0) {
+        const specialResponse = await fetch(`/api/transactions?type=special`);
+        const specialData = await specialResponse.json();
+        const specialTransactions = specialData.transactions || [];
+        
+        const processedData = {
+          transactions,
+          specialTransactions,
+          yearlyTotals: calculateYearlyTotals(transactions, categories)
+        };
+        
+        setCosts(processedData);
+      }
+      
+      return transactions;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       return [];
@@ -70,7 +87,7 @@ export function useTransactionOperations() {
         categoryId,
         categoryCode,
         categoryName,
-        status: 'completed' as const
+        status: 'processed' as const // Mark as processed when assigning a category
       };
       
       const response = await fetch(`/api/transactions/${transactionId}`, {

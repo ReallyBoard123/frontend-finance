@@ -2,7 +2,6 @@
 import { useState, useMemo } from 'react';
 import type { Transaction } from '@/types/transactions';
 import type { Category } from '@/types/budget';
-import { isElviTransaction, isZuweisungTransaction, shouldAppearInMissingEntries } from '@/lib/specialCategoryUtils';
 
 export function useMissingEntriesOperations(transactions: Transaction[], categories: Category[]) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
@@ -17,11 +16,11 @@ export function useMissingEntriesOperations(transactions: Transaction[], categor
 
   const isProperlyMapped = (transaction: Transaction): boolean => {
     // Normalize internal code
-    const normalizedInternalCode = transaction.internalCode.replace(/^0+/, '');
+    const normalizedInternalCode = transaction.internalCode?.replace(/^0+/, '') || '';
     
     // ELVI transactions (600) should always appear in missing entries unless completed
     if (normalizedInternalCode === '600') {
-      return transaction.status === 'completed';
+      return transaction.status === 'processed' || transaction.status === 'completed';
     }
     
     // Zuweisung transactions (23152) are considered properly mapped
@@ -29,23 +28,25 @@ export function useMissingEntriesOperations(transactions: Transaction[], categor
       return true;
     }
     
-    const metadata = transaction.metadata as { needsReview?: boolean } || {};
-    if (metadata.needsReview === true) return false;
+    // Check if transaction has inquiry pending
+    if (transaction.status === 'pending_inquiry') {
+      return false;
+    }
     
+    // If it has a status of "missing", it's not properly mapped
+    if (transaction.status === 'missing') {
+      return false;
+    }
+    
+    // If it doesn't have a categoryId or categoryCode, it's not properly mapped
     if (!transaction.categoryId) return false;
     
     if (!transaction.categoryCode || !transaction.categoryCode.startsWith('F')) {
       return false;
     }
     
-    const category = categories.find(c => c.code === transaction.categoryCode);
-    if (!category) return false;
-  
-    const isParent = categories.some(c => c.parentId === category.id);
-    if (!isParent) return true;
-  
-    const childCategories = categories.filter(c => c.parentId === category.id);
-    return childCategories.some(child => child.code === transaction.categoryCode);
+    // All other transactions with category assigned are considered properly mapped
+    return true;
   };
 
   const missingEntries = useMemo(() => {

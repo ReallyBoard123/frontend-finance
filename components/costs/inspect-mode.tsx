@@ -1,5 +1,5 @@
 // components/costs/inspect-mode.tsx
-import React, { useState } from 'react';
+import React, { useState, ReactElement } from 'react';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TransactionDetails } from './tabbed-transaction';
@@ -11,14 +11,14 @@ interface InspectModeProps {
   title?: string;
 }
 
-// Define an interface for components that can accept our props
+// Define an interface for components that can accept inspect props
 interface ComponentWithInspectProps {
-  onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => void;
+  onCellClick?: (e: React.MouseEvent<HTMLElement>, amount: number, year: number | string, categoryCode: string) => void;
   isInspectMode?: boolean;
 }
 
-// Helper function to check if a component accepts certain props
-const isValidComponentWithProps = (child: React.ReactElement): child is React.ReactElement<ComponentWithInspectProps> => {
+// Helper to check if a component accepts inspect properties
+const isValidComponentWithProps = (child: ReactElement): child is React.ReactElement<ComponentWithInspectProps> => {
   const { type } = child;
   // If it's a custom component (not a DOM element), it should accept our props
   return typeof type !== 'string';
@@ -30,29 +30,29 @@ export function InspectMode({
   title = "Inspect Mode" 
 }: InspectModeProps) {
   const [isInspectMode, setIsInspectMode] = useState(false);
-  const [selectedAmount, setSelectedAmount] = useState<{
+  const [selectedData, setSelectedData] = useState<{
     amount: number;
-    year: number;
+    year: number | string;
     categoryCode: string;
   } | null>(null);
 
-  const handleCellClick = (e: React.MouseEvent<HTMLElement>, amount: number, year: number, categoryCode: string) => {
+  const handleCellClick = (e: React.MouseEvent<HTMLElement>, amount: number, year: number | string, categoryCode: string) => {
     if (!isInspectMode) return;
     e.preventDefault();
-    setSelectedAmount({ amount, year, categoryCode });
+    setSelectedData({ amount, year, categoryCode });
   };
 
-  const matchingTransactions = selectedAmount ? 
+  const matchingTransactions = selectedData ? 
     transactions.filter(t => 
-      t.year === selectedAmount.year && 
-      t.categoryCode === selectedAmount.categoryCode
+      t.year.toString() === selectedData.year.toString() && 
+      t.categoryCode === selectedData.categoryCode
     ) : [];
 
+  // Clone children with inspect props
   const childrenWithProps = React.Children.map(children, child => {
     if (React.isValidElement(child)) {
-      // Only add props if it's a custom component, not a DOM element
+      // Only add props if it's a custom component that accepts our props
       if (isValidComponentWithProps(child)) {
-        // Type assertion to tell TypeScript these props are valid
         return React.cloneElement(child, {
           onCellClick: handleCellClick,
           isInspectMode,
@@ -80,18 +80,18 @@ export function InspectMode({
         {childrenWithProps}
       </div>
       
-      <Dialog open={!!selectedAmount} onOpenChange={() => setSelectedAmount(null)}>
+      <Dialog open={!!selectedData} onOpenChange={() => setSelectedData(null)}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Transaction Details for {selectedAmount?.categoryCode} ({selectedAmount?.year})
+              Transaction Details for {selectedData?.categoryCode} ({selectedData?.year})
             </DialogTitle>
           </DialogHeader>
-          {selectedAmount && matchingTransactions.length > 0 && (
+          {selectedData && matchingTransactions.length > 0 && (
             <TransactionDetails 
               transactions={matchingTransactions}
-              categoryCode={selectedAmount.categoryCode}
-              year={selectedAmount.year}
+              categoryCode={selectedData.categoryCode}
+              year={Number(selectedData.year)}
             />
           )}
         </DialogContent>
