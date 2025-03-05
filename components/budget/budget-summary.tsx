@@ -1,8 +1,7 @@
-// components/dashboard/BudgetSummary.tsx
+// components/budget/budget-summary.tsx
 import React, { useState, useEffect } from 'react';
 import { ActionButton } from '@/components/common/ui/action-button';
 import { RefreshCw, ChevronRight, ChevronDown, Search, Eye, EyeOff } from 'lucide-react';
-import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import type { Category } from '@/types/budget';
@@ -108,6 +107,42 @@ export function BudgetSummary({
   // Only display the years that are visible
   const displayYears = years.filter(year => visibleYears.has(year));
   
+  // Calculate budget for a category
+  const calculateBudget = (categoryId: string, year: string): number => {
+    const category = categories.find(cat => cat.id === categoryId);
+    if (!category) return 0;
+    
+    // If this is a leaf node, return its budget
+    if (!categories.some(c => c.parentId === categoryId)) {
+      return category.budgets?.[year] || 0;
+    }
+    
+    // If this is a parent node, calculate sum of all children
+    const childBudgets = categories
+      .filter(c => c.parentId === categoryId)
+      .reduce((sum, child) => sum + calculateBudget(child.id, year), 0);
+    
+    return childBudgets;
+  };
+  
+  // Calculate spent amount for a category
+  const calculateSpent = (categoryId: string, year: string): number => {
+    const category = categories.find(cat => cat.id === categoryId);
+    if (!category || !yearlyTotals[year]) return 0;
+    
+    // If this is a leaf node, return its spent amount
+    if (!categories.some(c => c.parentId === categoryId)) {
+      return yearlyTotals[year][category.code]?.spent || 0;
+    }
+    
+    // If this is a parent node, calculate sum of all children
+    const childSpent = categories
+      .filter(c => c.parentId === categoryId)
+      .reduce((sum, child) => sum + calculateSpent(child.id, year), 0);
+    
+    return childSpent;
+  };
+  
   // Recursively render a category and all its descendants
   const renderCategoryWithChildren = (category: Category, level: number) => {
     const children = getChildCategories(category.id);
@@ -135,10 +170,15 @@ export function BudgetSummary({
       return '';
     };
     
+    const rowBgColor = getBgColor();
+    
     return (
       <React.Fragment key={category.id}>
-        <tr className={`hover:bg-gray-50 ${getBgColor()}`}>
-          <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10 ${getBgColor()}`}>
+        <tr className={`hover:bg-gray-50 ${rowBgColor}`}>
+          <td 
+            className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10" 
+            style={{ backgroundColor: rowBgColor || 'white' }}
+          >
             <div className="flex items-center" style={{ paddingLeft: `${level * 16}px` }}>
               {hasChildren ? (
                 <button 
@@ -156,7 +196,10 @@ export function BudgetSummary({
               <span className="font-mono">{category.code}</span>
             </div>
           </td>
-          <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 sticky left-[140px] z-10 bg-inherit">
+          <td 
+            className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 sticky left-[140px] z-10" 
+            style={{ backgroundColor: rowBgColor || 'white' }}
+          >
             {category.name}
           </td>
           
@@ -202,42 +245,6 @@ export function BudgetSummary({
         {isExpanded && children.map(child => renderCategoryWithChildren(child, level + 1))}
       </React.Fragment>
     );
-  };
-  
-  // Calculate budget for a category
-  const calculateBudget = (categoryId: string, year: string): number => {
-    const category = categories.find(cat => cat.id === categoryId);
-    if (!category) return 0;
-    
-    // If this is a leaf node, return its budget
-    if (!categories.some(c => c.parentId === categoryId)) {
-      return category.budgets?.[year] || 0;
-    }
-    
-    // If this is a parent node, calculate sum of all children
-    const childBudgets = categories
-      .filter(c => c.parentId === categoryId)
-      .reduce((sum, child) => sum + calculateBudget(child.id, year), 0);
-    
-    return childBudgets;
-  };
-  
-  // Calculate spent amount for a category
-  const calculateSpent = (categoryId: string, year: string): number => {
-    const category = categories.find(cat => cat.id === categoryId);
-    if (!category || !yearlyTotals[year]) return 0;
-    
-    // If this is a leaf node, return its spent amount
-    if (!categories.some(c => c.parentId === categoryId)) {
-      return yearlyTotals[year][category.code]?.spent || 0;
-    }
-    
-    // If this is a parent node, calculate sum of all children
-    const childSpent = categories
-      .filter(c => c.parentId === categoryId)
-      .reduce((sum, child) => sum + calculateSpent(child.id, year), 0);
-    
-    return childSpent;
   };
 
   return (
@@ -317,10 +324,10 @@ export function BudgetSummary({
         <table className="min-w-full divide-y divide-gray-200">
           <thead>
             <tr className="bg-gray-50">
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-20 shadow-sm">
                 Code
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-[140px] bg-gray-50 z-10">
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-[140px] bg-gray-50 z-20 shadow-sm">
                 Name
               </th>
               {displayYears.map(year => (
@@ -358,7 +365,6 @@ export function BudgetSummary({
               rootCategories.map(category => renderCategoryWithChildren(category, 0))
             )}
           </tbody>
-          {/* Footer with totals removed as requested */}
         </table>
       </div>
     </div>

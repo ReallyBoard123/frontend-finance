@@ -1,3 +1,4 @@
+// lib/hooks/useTransactionOperations.ts
 import { useState } from 'react';
 import { useFinanceStore } from '@/lib/store';
 import type { Transaction, TransactionUpdate, YearlyTotals } from '@/types/transactions';
@@ -18,15 +19,20 @@ export function useTransactionOperations() {
       const transactions = data.transactions || [];
       
       // Update the store with fetched data
-      if (transactions.length > 0) {
+      if (categories.length > 0) {
         const specialResponse = await fetch(`/api/transactions?type=special`);
         const specialData = await specialResponse.json();
         const specialTransactions = specialData.transactions || [];
         
+        // Match transactions to categories
+        const matchedTransactions = matchTransactionsToCategories(transactions, categories);
+        
+        const yearlyTotals = calculateYearlyTotals(matchedTransactions, categories);
+        
         const processedData = {
-          transactions,
+          transactions: matchedTransactions,
           specialTransactions,
-          yearlyTotals: calculateYearlyTotals(transactions, categories)
+          yearlyTotals
         };
         
         setCosts(processedData);
@@ -57,10 +63,13 @@ export function useTransactionOperations() {
           transaction.id === transactionId ? { ...transaction, ...updates } : transaction
         );
         
+        // Re-match transactions with categories
+        const matchedTransactions = matchTransactionsToCategories(updatedTransactions, categories);
+        
         const updatedData = {
           ...costs,
-          transactions: updatedTransactions,
-          yearlyTotals: calculateYearlyTotals(updatedTransactions, categories)
+          transactions: matchedTransactions,
+          yearlyTotals: calculateYearlyTotals(matchedTransactions, categories)
         };
         
         setCosts(updatedData);
@@ -121,8 +130,52 @@ export function useTransactionOperations() {
     }
   };
 
+  // Enhanced function to ensure all transactions are properly associated with categories
+  const matchTransactionsToCategories = (transactions: Transaction[], categories: Category[]): Transaction[] => {
+    return transactions.map(transaction => {
+      // If transaction already has a categoryCode and categoryId, keep it
+      if (transaction.categoryCode && transaction.categoryId) {
+        return transaction;
+      }
+      
+      // For transactions with only categoryCode but no categoryId
+      if (transaction.categoryCode && !transaction.categoryId) {
+        const category = categories.find(c => c.code === transaction.categoryCode);
+        if (category) {
+          return {
+            ...transaction,
+            categoryId: category.id,
+            categoryName: category.name
+          };
+        }
+      }
+      
+      // For transactions with internalCode that might match a category
+      const internalCodeFormatted = `F${transaction.internalCode.padStart(4, '0')}`;
+      const category = categories.find(c => c.code === internalCodeFormatted);
+      
+      if (category && !transaction.requiresSpecialHandling) {
+        return {
+          ...transaction,
+          categoryId: category.id,
+          categoryCode: category.code,
+          categoryName: category.name
+        };
+      }
+      
+      return transaction;
+    });
+  };
+
   const calculateYearlyTotals = (transactions: Transaction[], categories: Category[]): YearlyTotals => {
-    const yearlyTotals: Record<string, Record<string, { spent: number; budget: number; remaining: number; transactions: Transaction[]; isSpecialCategory: boolean }>> = {};
+    const yearlyTotals: Record<string, Record<string, { 
+      spent: number; 
+      budget: number; 
+      remaining: number; 
+      transactions: Transaction[]; 
+      isSpecialCategory: boolean 
+    }>> = {};
+    
     const years = [...new Set(transactions.map(t => t.year.toString()))];
     
     years.forEach(year => {
@@ -141,7 +194,7 @@ export function useTransactionOperations() {
     transactions.forEach(transaction => {
       const year = transaction.year.toString();
       const categoryCode = transaction.categoryCode;
-      if (!categoryCode) return;
+      if (!categoryCode || !yearlyTotals[year]) return;
       
       if (yearlyTotals[year][categoryCode]) {
         yearlyTotals[year][categoryCode].spent += transaction.amount;
@@ -153,6 +206,7 @@ export function useTransactionOperations() {
       const category = categories.find(c => c.code === categoryCode);
       if (!category) return;
   
+      // Also update parent category totals
       const parentCategory = categories.find(c => c.id === category.parentId);
       if (parentCategory && yearlyTotals[year][parentCategory.code]) {
         yearlyTotals[year][parentCategory.code].spent += transaction.amount;
@@ -162,6 +216,20 @@ export function useTransactionOperations() {
     });
   
     return yearlyTotals;
+  };
+
+  // Function to manually refresh yearly totals (but not automatically)
+  const refreshYearlyTotals = () => {
+    if (!costs?.transactions || categories.length === 0) return;
+    
+    const matchedTransactions = matchTransactionsToCategories(costs.transactions, categories);
+    const yearlyTotals = calculateYearlyTotals(matchedTransactions, categories);
+    
+    setCosts({
+      ...costs,
+      transactions: matchedTransactions,
+      yearlyTotals
+    });
   };
 
   const validateTransaction = (transaction: Transaction) => {
@@ -212,6 +280,8 @@ export function useTransactionOperations() {
     }
   };
 
+  // Remove the auto-refresh effect that would cause infinite API calls
+
   return { 
     costs,
     isLoading,
@@ -220,6 +290,8 @@ export function useTransactionOperations() {
     updateTransaction, 
     updateTransactionCategory,
     calculateYearlyTotals,
+    refreshYearlyTotals,
+    matchTransactionsToCategories,
     validateTransaction,
     exportTransactions
   };

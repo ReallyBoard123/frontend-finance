@@ -1,17 +1,22 @@
+// app/dashboard/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-
 import { useFinanceStore } from '@/lib/store';
-import { Transaction } from '@/types/transactions';
+import { useCategoryOperations } from '@/lib/hooks/useCategoryOperations';
+import { useTransactionOperations } from '@/lib/hooks/useTransactionOperations';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TransactionDetails } from '@/components/costs/tabbed-transaction';
 import { BudgetSummary } from '@/components/budget/budget-summary';
+import type { Transaction } from '@/types/transactions';
 
 export default function DashboardPage() {
-  const { categories, costs, reset: resetStore } = useFinanceStore();
+  const { categories, costs, setCosts } = useFinanceStore();
+  const { fetchCategories } = useCategoryOperations();
+  const { calculateYearlyTotals } = useTransactionOperations();
+  
   const [isLoading, setIsLoading] = useState(false);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [inspectData, setInspectData] = useState<{
@@ -20,49 +25,86 @@ export default function DashboardPage() {
     year: string | number;
   } | null>(null);
   
+  // Track if initial data has been loaded
+  const initialLoadComplete = useRef(false);
+  
   // One-time initial data load
   useEffect(() => {
+    // Only run this effect once
+    if (initialLoadComplete.current) return;
+    
     const loadInitialData = async () => {
+      // If we already have both categories and transaction data, don't reload
+      if (categories.length > 0 && (costs?.transactions?.length ?? 0) > 0) {
+        initialLoadComplete.current = true;
+        return;
+      }
+      
       setIsLoading(true);
       try {
-        // Fetch data directly from API
-        const catResponse = await fetch('/api/categories');
-        const categoriesData = await catResponse.json();
-        
-        const transResponse = await fetch('/api/transactions');
-        const transData = await transResponse.json();
-        const transactions = transData.transactions || [];
-        
-        // Update state
-        if (transactions.length > 0) {
-          const sorted = [...transactions].sort(
-            (a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime()
-          );
-          setRecentTransactions(sorted.slice(0, 5));
+        // Fetch categories first if not already loaded
+        let currentCategories = categories;
+        if (categories.length === 0) {
+          await fetchCategories();
+          // After fetchCategories, the store is updated
+          currentCategories = useFinanceStore.getState().categories;
         }
+        
+        // Fetch transactions if needed
+        if (!costs?.transactions || costs.transactions.length === 0) {
+          const response = await fetch('/api/transactions');
+          const data = await response.json();
+          const transactions = data.transactions || [];
+          
+          // Update recent transactions
+          if (transactions.length > 0) {
+            const sorted = [...transactions].sort(
+              (a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime()
+            );
+            setRecentTransactions(sorted.slice(0, 5));
+            
+            // Calculate yearly totals and update costs
+            const yearlyTotals = calculateYearlyTotals(transactions, currentCategories);
+            setCosts({
+              transactions,
+              specialTransactions: [], // We'll handle these separately if needed
+              yearlyTotals
+            });
+          }
+        }
+        
+        initialLoadComplete.current = true;
       } catch (error) {
         console.error('Error loading dashboard data:', error);
+        toast.error('Failed to load data');
       } finally {
         setIsLoading(false);
       }
     };
     
     loadInitialData();
-  }, []); // Empty dependency array - run once
+  }, []);  // Empty dependency array ensures this runs once
   
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
-      // Fetch data directly from API
-      const catResponse = await fetch('/api/categories');
-      const categoriesData = await catResponse.json();
+      // Reload categories
+      await fetchCategories();
+      const currentCategories = useFinanceStore.getState().categories;
       
-      const transResponse = await fetch('/api/transactions');
-      const transData = await transResponse.json();
-      const transactions = transData.transactions || [];
+      // Reload transactions and recalculate
+      const response = await fetch('/api/transactions');
+      const data = await response.json();
+      const transactions = data.transactions || [];
       
-      // Update recent transactions
       if (transactions.length > 0) {
+        const yearlyTotals = calculateYearlyTotals(transactions, currentCategories);
+        setCosts({
+          transactions,
+          specialTransactions: [], 
+          yearlyTotals
+        });
+        
         const sorted = [...transactions].sort(
           (a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime()
         );
@@ -100,7 +142,7 @@ export default function DashboardPage() {
     }
   };
   
-  const handleCellClick = (amount: number, year: string | number, categoryCode: string) => {
+  const handleCellClick = (amount: number, year: number | string, categoryCode: string) => {
     if (!costs?.transactions) return;
     
     const matchingTransactions = costs.transactions.filter(
