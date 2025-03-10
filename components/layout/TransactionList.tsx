@@ -1,17 +1,20 @@
-// components/dashboard/TransactionList.tsx
-import React, { useState } from 'react';
+// components/layout/TransactionList.tsx
+import React, { useState, useEffect } from 'react';
 import { FilterBar } from '@/components/common/ui/filter-bar';
+import { StatusBadge } from '@/components/common/ui/status-badge';
 import { ActionButton } from '@/components/common/ui/action-button';
-import { Search, RefreshCw, Edit, Trash2, FileText, Check, X, Users, ArrowUpDown, HelpCircle, FolderTree } from 'lucide-react';
+import { Search, RefreshCw, Edit, Trash2, FileText, ArrowUpDown, HelpCircle, FolderTree, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AskGerlindDialog } from "@/components/costs/missing-enteries/solution-dialog/ask-gerlind-dialog";
 import { AssignCategoryDialog } from "@/components/costs/missing-enteries/solution-dialog/assign-category";
-import type { Transaction } from '@/types/transactions';
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { Transaction, TransactionStatus } from '@/types/transactions';
 import type { Category } from '@/types/budget';
-import { Button } from '../ui/button';
+import { toast } from 'sonner';
+import { Button } from "@/components/ui/button";
 
 interface TransactionListProps {
-  transactions: Transaction[];
+  transactions?: Transaction[];
   categories?: Category[];
   onTransactionEdit?: (transaction: Transaction) => void;
   onTransactionDelete?: (transaction: Transaction) => void;
@@ -40,6 +43,63 @@ export function TransactionList({
   const [askGerlindOpen, setAskGerlindOpen] = useState(false);
   const [assignCategoryOpen, setAssignCategoryOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('all');
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+  const [specialTransactions, setSpecialTransactions] = useState<Transaction[]>([]);
+  const [missingTransactions, setMissingTransactions] = useState<Transaction[]>([]);
+  
+  // Fetch all transaction types on mount
+  useEffect(() => {
+    const fetchAllTransactionTypes = async () => {
+      if (transactions.length > 0) {
+        // If transactions were passed as props, categorize them
+        categorizeTransactions(transactions);
+      } else {
+        try {
+          // Otherwise fetch from API
+          const [regularRes, specialRes] = await Promise.all([
+            fetch('/api/transactions?type=regular'),
+            fetch('/api/transactions?type=special')
+          ]);
+          
+          const [regular, special] = await Promise.all([
+            regularRes.json(),
+            specialRes.json()
+          ]);
+          
+          const allFetchedTransactions = [
+            ...(regular.transactions || []),
+            ...(special.transactions || [])
+          ];
+          
+          categorizeTransactions(allFetchedTransactions);
+        } catch (error) {
+          console.error('Error fetching transactions:', error);
+          toast.error('Failed to load all transaction types');
+        }
+      }
+    };
+    
+    fetchAllTransactionTypes();
+  }, [transactions]);
+  
+  // Function to categorize transactions by status
+  const categorizeTransactions = (txs: Transaction[]) => {
+    setAllTransactions(txs);
+    
+    // Special transactions
+    const special = txs.filter(t => 
+      t.requiresSpecialHandling || (t.status === 'special' as TransactionStatus)
+    );
+    setSpecialTransactions(special);
+    
+    // Missing transactions (no categoryId or 'missing' status)
+    const missing = txs.filter(t => 
+      t.status === 'missing' || 
+      (!t.categoryId && t.status !== ('special' as TransactionStatus) && !t.requiresSpecialHandling)
+    );
+    setMissingTransactions(missing);
+  };
   
   const handleSort = (field: keyof Transaction) => {
     if (sortField === field) {
@@ -71,18 +131,30 @@ export function TransactionList({
     setAssignCategoryOpen(true);
   };
 
+  // Get transactions based on active tab
+  const getActiveTransactions = () => {
+    switch (activeTab) {
+      case 'special':
+        return specialTransactions;
+      case 'missing':
+        return missingTransactions;
+      default:
+        return allTransactions;
+    }
+  };
+
   // Filter and sort transactions
-  const filteredTransactions = transactions.filter(transaction => {
+  const filteredTransactions = getActiveTransactions().filter(transaction => {
     // Text filter
     const textMatch = filter === '' || 
       Object.values(transaction).some(value => 
         typeof value === 'string' && value.toLowerCase().includes(filter.toLowerCase())
       );
     
-    // Status filter
+    // Status filter (only apply if not 'all')
     const statusMatch = statusFilter === 'all' || transaction.status === statusFilter;
     
-    // Category filter
+    // Category filter (only apply if not 'all')
     const categoryMatch = categoryFilter === 'all' || transaction.categoryCode === categoryFilter;
     
     return textMatch && statusMatch && categoryMatch;
@@ -90,13 +162,19 @@ export function TransactionList({
     let comparison = 0;
     
     if (sortField === 'bookingDate') {
-      comparison = new Date(a.bookingDate).getTime() - new Date(b.bookingDate).getTime();
+      const aDate = new Date(a.bookingDate);
+      const bDate = new Date(b.bookingDate);
+      comparison = aDate.getTime() - bDate.getTime();
     } else if (sortField === 'amount') {
       comparison = a.amount - b.amount;
     } else if (sortField === 'categoryCode') {
-      comparison = (a.categoryCode || '').localeCompare(b.categoryCode || '');
+      const aCode = a.categoryCode || '';
+      const bCode = b.categoryCode || '';
+      comparison = aCode.localeCompare(bCode);
     } else if (sortField === 'personReference') {
-      comparison = (a.personReference || '').localeCompare(b.personReference || '');
+      const aRef = a.personReference || '';
+      const bRef = b.personReference || '';
+      comparison = aRef.localeCompare(bRef);
     } else {
       // For any other field, try to compare as strings
       const aValue = a[sortField];
@@ -113,42 +191,8 @@ export function TransactionList({
   const totalAmount = filteredTransactions.reduce((sum, t) => sum + t.amount, 0);
 
   // Get unique categories for the filter dropdown
-  const uniqueCategories = [...new Set(transactions.map(t => t.categoryCode).filter(Boolean))];
+  const uniqueCategories = [...new Set(allTransactions.map(t => t.categoryCode).filter(Boolean))];
   
-  // Status badge helper
-  const renderStatusBadge = (status?: string) => {
-    switch(status) {
-      case 'processed':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-green-100 text-green-800">
-            <Check size={12} className="mr-1" />
-            Processed
-          </span>
-        );
-      case 'missing':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800">
-            <X size={12} className="mr-1" />
-            Missing Category
-          </span>
-        );
-      case 'pending_inquiry':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-orange-100 text-orange-800">
-            <HelpCircle size={12} className="mr-1" />
-            Inquiry Sent
-          </span>
-        );
-      default:
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
-            <X size={12} className="mr-1" />
-            Unprocessed
-          </span>
-        );
-    }
-  };
-
   // Format date helper
   const formatDate = (date: Date | string) => {
     if (!date) return '';
@@ -175,6 +219,21 @@ export function TransactionList({
             )}
           </div>
         </div>
+        
+        {/* Transaction type tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+          <TabsList>
+            <TabsTrigger value="all">
+              All Transactions ({allTransactions.length})
+            </TabsTrigger>
+            <TabsTrigger value="special">
+              Special ({specialTransactions.length})
+            </TabsTrigger>
+            <TabsTrigger value="missing">
+              Missing ({missingTransactions.length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
       
       <div className="p-4 border-b border-gray-100">
@@ -199,6 +258,7 @@ export function TransactionList({
               <option value="missing">Missing Category</option>
               <option value="pending_inquiry">Inquiry Sent</option>
               <option value="unprocessed">Unprocessed</option>
+              <option value="special">Special</option>
             </select>
             
             <select 
@@ -234,7 +294,7 @@ export function TransactionList({
       
       <div className="p-4 flex justify-between items-center text-sm text-gray-600">
         <div>
-          Showing {filteredTransactions.length} of {transactions.length} transactions
+          Showing {filteredTransactions.length} of {getActiveTransactions().length} transactions
         </div>
         <div className="font-medium">
           Total: {totalAmount.toLocaleString('de-DE')} €
@@ -313,6 +373,7 @@ export function TransactionList({
             ) : (
               filteredTransactions.map(transaction => {
                 const category = categories.find(c => c.code === transaction.categoryCode);
+                const status = transaction.status as TransactionStatus || 'unprocessed';
                 
                 return (
                   <tr 
@@ -346,7 +407,7 @@ export function TransactionList({
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-center">
-                      {renderStatusBadge(transaction.status)}
+                      <StatusBadge status={status} />
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium" onClick={e => e.stopPropagation()}>
                       <div className="flex justify-end space-x-2">
@@ -381,51 +442,6 @@ export function TransactionList({
         </table>
       </div>
       
-      {filteredTransactions.length > 10 && (
-        <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 text-sm">
-          <div className="flex-1 flex justify-between sm:hidden">
-            <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-              Previous
-            </button>
-            <button className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-              Next
-            </button>
-          </div>
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">1</span> to <span className="font-medium">{Math.min(filteredTransactions.length, 10)}</span> of <span className="font-medium">{filteredTransactions.length}</span> results
-              </p>
-            </div>
-            <div>
-              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <button className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                  <span className="sr-only">Previous</span>
-                  <div className="h-5 w-5" aria-hidden="true">‹</div>
-                </button>
-                <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                  1
-                </button>
-                {filteredTransactions.length > 10 && (
-                  <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    2
-                  </button>
-                )}
-                {filteredTransactions.length > 20 && (
-                  <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    3
-                  </button>
-                )}
-                <button className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
-                  <span className="sr-only">Next</span>
-                  <div className="h-5 w-5" aria-hidden="true">›</div>
-                </button>
-              </nav>
-            </div>
-          </div>
-        </div>
-      )}
-      
       {/* Transaction Details Dialog */}
       {selectedTransaction && (
         <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
@@ -454,72 +470,25 @@ export function TransactionList({
                 </div>
               </div>
               
-              <div className="space-y-2">
-                <h3 className="font-medium text-gray-900">Additional Details</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm border p-3 rounded-md bg-gray-50">
-                  <div className="font-semibold">Description:</div>
-                  <div>{selectedTransaction.description}</div>
-                  
-                  <div className="font-semibold">Person Reference:</div>
-                  <div>{selectedTransaction.personReference || '-'}</div>
-                  
-                  <div className="font-semibold">Project Code:</div>
-                  <div>{selectedTransaction.projectCode}</div>
-                  
-                  <div className="font-semibold">Year:</div>
-                  <div>{selectedTransaction.year}</div>
-                  
-                  <div className="font-semibold">Transaction Type:</div>
-                  <div>{selectedTransaction.transactionType}</div>
-                </div>
-              </div>
+              {/* Additional transaction details would go here */}
+            </div>
+            
+            <div className="flex justify-end gap-4 mt-4">
+              <Button
+                variant="outline"
+                onClick={() => handleAssignCategory(selectedTransaction)}
+              >
+                <FolderTree className="h-4 w-4 mr-2" />
+                Assign Category
+              </Button>
               
-              <div className="col-span-2 space-y-2">
-                <h3 className="font-medium text-gray-900">Extended Information</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm border p-3 rounded-md bg-gray-50 md:grid-cols-4">
-                  <div className="font-semibold">Cost Group:</div>
-                  <div>{selectedTransaction.costGroup || '-'}</div>
-                  
-                  <div className="font-semibold">Internal Code:</div>
-                  <div>{selectedTransaction.internalCode}</div>
-                  
-                  <div className="font-semibold">Invoice Date:</div>
-                  <div>{selectedTransaction.invoiceDate ? formatDate(selectedTransaction.invoiceDate) : '-'}</div>
-                  
-                  <div className="font-semibold">Invoice Number:</div>
-                  <div>{selectedTransaction.invoiceNumber || '-'}</div>
-                  
-                  <div className="font-semibold">Payment Partner:</div>
-                  <div>{selectedTransaction.paymentPartner || '-'}</div>
-                  
-                  <div className="font-semibold">Internal Account:</div>
-                  <div>{selectedTransaction.internalAccount || '-'}</div>
-                  
-                  <div className="font-semibold">Account Label:</div>
-                  <div>{selectedTransaction.accountLabel || '-'}</div>
-                  
-                  <div className="font-semibold">Details:</div>
-                  <div>{selectedTransaction.details || '-'}</div>
-                </div>
-              </div>
-              
-              <div className="col-span-2 flex justify-end space-x-4 mt-4">
-                <Button 
-                  variant="outline"
-                  onClick={() => handleAssignCategory(selectedTransaction)}
-                >
-                  <FolderTree size={16} className="mr-2" />
-                  Assign Category
-                </Button>
-                
-                <Button 
-                  variant="outline"
-                  onClick={() => handleAskGerlind(selectedTransaction)}
-                >
-                  <HelpCircle size={16} className="mr-2" />
-                  Ask Gerlind
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                onClick={() => handleAskGerlind(selectedTransaction)}
+              >
+                <HelpCircle className="h-4 w-4 mr-2" />
+                Ask Gerlind
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

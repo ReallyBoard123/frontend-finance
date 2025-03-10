@@ -4,6 +4,7 @@ import { ActionButton } from '@/components/common/ui/action-button';
 import { RefreshCw, ChevronRight, ChevronDown, Search, Eye, EyeOff } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { Category } from '@/types/budget';
 import type { YearlyTotals } from '@/types/transactions';
 
@@ -163,23 +164,17 @@ export function BudgetSummary({
     const totalRemaining = totalBudget - totalSpent;
     
     // Custom bg-color based on category level and type
-    const getBgColor = () => {
-      if (level === 0) return 'bg-orange-50';
-      if (category.name.toLowerCase().includes('summe')) return 'bg-yellow-50';
-      if (category.color) return `bg-[${category.color}]`;
-      return '';
-    };
-    
-    const rowBgColor = getBgColor();
+    let rowBgColor = '';
+    if (level === 0) rowBgColor = 'bg-orange-50';
+    else if (category.name.toLowerCase().includes('summe')) rowBgColor = 'bg-yellow-50';
+    else if (category.color) rowBgColor = `bg-[${category.color}]`;
     
     return (
       <React.Fragment key={category.id}>
-        <tr className={`hover:bg-gray-50 ${rowBgColor}`}>
-          <td 
-            className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 z-10" 
-            style={{ backgroundColor: rowBgColor || 'white' }}
-          >
-            <div className="flex items-center" style={{ paddingLeft: `${level * 16}px` }}>
+        <tr className="border-b border-gray-200">
+          {/* Code column - NOT STICKY */}
+          <td className="whitespace-nowrap border-r border-gray-200 min-w-[120px]">
+            <div className={`h-12 px-4 flex items-center ${rowBgColor}`} style={{ paddingLeft: `${level * 16 + 16}px` }}>
               {hasChildren ? (
                 <button 
                   className="mr-2 focus:outline-none"
@@ -193,23 +188,30 @@ export function BudgetSummary({
               ) : (
                 <div className="w-6"></div> // Spacer for alignment
               )}
-              <span className="font-mono">{category.code}</span>
+              <span className="font-mono text-sm">{category.code}</span>
             </div>
           </td>
+          
+          {/* Name column - STICKY */}
           <td 
-            className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 sticky left-[140px] z-10" 
+            className="whitespace-nowrap sticky left-0 z-20 border-r border-gray-200 min-w-[300px]" 
             style={{ backgroundColor: rowBgColor || 'white' }}
           >
-            {category.name}
+            <div className={`h-12 px-4 flex items-center text-sm ${rowBgColor}`}>
+              {category.name}
+            </div>
           </td>
           
+          {/* Dynamic year columns - Budget, Spent, Remaining */}
           {yearData.map(data => (
             <React.Fragment key={data.year}>
-              <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">
-                {data.budget.toLocaleString('de-DE')} €
+              <td className="border-r border-gray-200 min-w-[150px]">
+                <div className={`px-4 h-12 flex items-center justify-end text-sm whitespace-nowrap ${rowBgColor}`}>
+                  {data.budget.toLocaleString('de-DE')} €
+                </div>
               </td>
               <td 
-                className={`px-4 py-3 whitespace-nowrap text-sm text-right font-medium ${
+                className={`border-r border-gray-200 min-w-[150px] ${
                   isInspectMode ? 'cursor-pointer hover:bg-blue-50' : ''
                 }`}
                 onClick={isInspectMode && onCellClick ? 
@@ -217,27 +219,37 @@ export function BudgetSummary({
                   undefined
                 }
               >
-                {data.spent.toLocaleString('de-DE')} €
+                <div className={`px-4 h-12 flex items-center justify-end text-sm font-medium whitespace-nowrap ${rowBgColor}`}>
+                  {data.spent.toLocaleString('de-DE')} €
+                </div>
               </td>
-              <td className={`px-4 py-3 whitespace-nowrap text-sm text-right font-medium ${
-                data.remaining >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
-                {data.remaining.toLocaleString('de-DE')} €
+              <td className="border-r border-gray-200 min-w-[150px]">
+                <div className={`px-4 h-12 flex items-center justify-end text-sm font-medium whitespace-nowrap ${
+                  data.remaining >= 0 ? 'text-green-600' : 'text-red-600'
+                } ${rowBgColor}`}>
+                  {data.remaining.toLocaleString('de-DE')} €
+                </div>
               </td>
             </React.Fragment>
           ))}
           
           {/* Total columns */}
-          <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium bg-blue-50">
-            {totalBudget.toLocaleString('de-DE')} €
+          <td className="border-r border-gray-200 min-w-[150px] bg-blue-50">
+            <div className="px-4 h-12 flex items-center justify-end text-sm font-medium whitespace-nowrap">
+              {totalBudget.toLocaleString('de-DE')} €
+            </div>
           </td>
-          <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium bg-blue-50">
-            {totalSpent.toLocaleString('de-DE')} €
+          <td className="border-r border-gray-200 min-w-[150px] bg-blue-50">
+            <div className="px-4 h-12 flex items-center justify-end text-sm font-medium whitespace-nowrap">
+              {totalSpent.toLocaleString('de-DE')} €
+            </div>
           </td>
-          <td className={`px-4 py-3 whitespace-nowrap text-sm text-right font-medium bg-blue-50 ${
-            totalRemaining >= 0 ? 'text-green-600' : 'text-red-600'
-          }`}>
-            {totalRemaining.toLocaleString('de-DE')} €
+          <td className="min-w-[150px] bg-blue-50">
+            <div className={`px-4 h-12 flex items-center justify-end text-sm font-medium whitespace-nowrap ${
+              totalRemaining >= 0 ? 'text-green-600' : 'text-red-600'
+            }`}>
+              {totalRemaining.toLocaleString('de-DE')} €
+            </div>
           </td>
         </tr>
         
@@ -255,28 +267,32 @@ export function BudgetSummary({
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-              <input
+              <Input
                 type="text"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filter categories..."
-                className="pl-9 pr-4 py-2 border border-gray-300 rounded-md text-sm"
+                className="pl-9 pr-4 py-2 w-64"
               />
             </div>
             
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={expandAll}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50"
+              className="text-sm text-gray-600"
             >
               Expand All
-            </button>
+            </Button>
             
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={collapseAll}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-600 hover:bg-gray-50"
+              className="text-sm text-gray-600"
             >
               Collapse All
-            </button>
+            </Button>
             
             <ActionButton
               onClick={handleRefresh}
@@ -320,44 +336,72 @@ export function BudgetSummary({
         </div>
       </div>
       
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
+      <div className="relative overflow-auto">
+        <table className="w-full border-collapse border border-gray-200">
           <thead>
-            <tr className="bg-gray-50">
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-20 shadow-sm">
-                Code
+            <tr className="bg-gray-50 border-b border-gray-200">
+              {/* Header for Code column - NOT STICKY */}
+              <th className="border-r border-gray-200 min-w-[120px]">
+                <div className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Code
+                </div>
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-[140px] bg-gray-50 z-20 shadow-sm">
-                Name
+              
+              {/* Header for Name column - STICKY */}
+              <th 
+                className="sticky left-0 z-30 bg-gray-50 border-r border-gray-200 shadow-sm min-w-[300px]"
+              >
+                <div className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Name
+                </div>
               </th>
+              
+              {/* Dynamic year column headers */}
               {displayYears.map(year => (
                 <React.Fragment key={year}>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {year} Budget
+                  <th className="border-r border-gray-200 min-w-[150px]">
+                    <div className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {year} Budget
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Spent
+                  <th className="border-r border-gray-200 min-w-[150px]">
+                    <div className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Spent
+                    </div>
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Remaining
+                  <th className="border-r border-gray-200 min-w-[150px]">
+                    <div className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Remaining
+                    </div>
                   </th>
                 </React.Fragment>
               ))}
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-blue-50">
-                Total Budget
+              
+              {/* Total column headers */}
+              <th className="border-r border-gray-200 min-w-[150px] bg-blue-50">
+                <div className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Budget
+                </div>
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-blue-50">
-                Total Spent
+              <th className="border-r border-gray-200 min-w-[150px] bg-blue-50">
+                <div className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total Spent
+                </div>
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider bg-blue-50">
-                Remaining
+              <th className="min-w-[150px] bg-blue-50">
+                <div className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Remaining
+                </div>
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody>
             {rootCategories.length === 0 ? (
               <tr>
-                <td colSpan={3 + displayYears.length * 3 + 3} className="px-4 py-4 text-center text-sm text-gray-500">
+                <td 
+                  colSpan={3 + displayYears.length * 3 + 3} 
+                  className="px-4 py-4 text-center text-sm text-gray-500"
+                >
                   {filter ? `No categories found matching "${filter}"` : 'No categories available'}
                 </td>
               </tr>
