@@ -1,78 +1,130 @@
 // app/api/transactions/route.ts
-import { NextRequest, NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { logger } from '@/lib/logger'
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { logger } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const type = searchParams.get('type') || 'regular';
+    const type = searchParams.get('type');
     
-    // Get all transactions
-    const transactions = await prisma.transaction.findMany({
-      include: {
-        category: true
-      },
-      orderBy: {
-        bookingDate: 'desc'
+    // Get all transactions and categories in one query
+    const [transactions, categories] = await Promise.all([
+      prisma.transaction.findMany({
+        include: { category: true },
+        orderBy: { bookingDate: 'desc' }
+      }),
+      prisma.category.findMany()
+    ]);
+    
+    // Create a map of parent categories
+    const parentCategoryIds = new Set();
+    categories.forEach(category => {
+      if (categories.some(c => c.parentId === category.id)) {
+        parentCategoryIds.add(category.id);
       }
     });
     
-    // For debugging
     console.log(`Found ${transactions.length} total transactions`);
     
-    // Map database model to frontend model
-    const mappedTransactions = transactions.map(transaction => {
-      // Get category data from the relationship or metadata
+    // Map and categorize all transactions upfront
+    const allTransactions = transactions.map(transaction => {
       const categoryData = transaction.category || { code: undefined, name: undefined };
       const metadata = transaction.metadata ? (transaction.metadata as Record<string, unknown>) : {};
+      const isParentCategory = transaction.category && parentCategoryIds.has(transaction.category.id);
       
-      // More explicit special transactions filter
-      const isSpecial = type === 'special' && (
+      // Determine if this is a special transaction
+      const isSpecial = 
         transaction.transactionType === 'IVMC-Hochr.' || 
-        transaction.internalCode === '23152'
-      );
+        transaction.internalCode.replace(/^0+/, '') === '23152';
       
-      const isRegular = type === 'regular' && 
-        transaction.transactionType !== 'IVMC-Hochr.' && 
-        transaction.internalCode !== '23152';
-      
-      // Return the transaction if it matches the requested type
-      if (isSpecial || isRegular) {
-        return {
-          id: transaction.id,
-          projectCode: transaction.projectCode,
-          year: transaction.year,
-          amount: transaction.amount,
-          internalCode: transaction.internalCode,
-          description: transaction.description,
-          costGroup: transaction.costGroup,
-          transactionType: transaction.transactionType,
-          documentNumber: transaction.documentNumber,
-          bookingDate: transaction.bookingDate,
-          personReference: transaction.personReference || null,
-          details: transaction.details || null,
-          invoiceDate: transaction.invoiceDate,
-          invoiceNumber: transaction.invoiceNumber || null,
-          paymentPartner: transaction.paymentPartner || null,
-          internalAccount: transaction.internalAccount || null,
-          accountLabel: transaction.accountLabel || null,
-          categoryId: transaction.categoryId,
-          // Use metadata for these fields if available or use raw data from internalCode
-          categoryCode: metadata.categoryCode || categoryData.code || (transaction.internalCode ? `${transaction.internalCode}` : null),
-          categoryName: metadata.categoryName || categoryData.name || null,
-          status: transaction.status,
-          requiresSpecialHandling: isSpecial
-        };
+      // Determine transaction type
+      let transactionType = 'regular';
+      if (isSpecial) {
+        transactionType = 'special';
+      } else if (isParentCategory || !transaction.categoryId) {
+        transactionType = 'missing';
       }
-      return null;
-    }).filter(Boolean);
+      
+      // Determine proper status
+      let status = transaction.status || 'unprocessed';
+      if (isSpecial) {
+        status = 'special';
+      } else if (isParentCategory || !transaction.categoryId) {
+        status = 'missing';
+      } else if (transaction.categoryId && !isParentCategory) {
+        status = 'processed';
+      }
+      
+      return {
+        id: transaction.id,
+        projectCode: transaction.projectCode,
+        year: transaction.year,
+        amount: transaction.amount,
+        internalCode: transaction.internalCode,
+        description: transaction.description,
+        costGroup: transaction.costGroup,
+        transactionType: transaction.transactionType,
+        documentNumber: transaction.documentNumber,
+        bookingDate: transaction.bookingDate,
+        personReference: transaction.personReference || null,
+        details: transaction.details || null,
+        invoiceDate: transaction.invoiceDate,
+        invoiceNumber: transaction.invoiceNumber || null,
+        paymentPartner: transaction.paymentPartner || null,
+        internalAccount: transaction.internalAccount || null,
+        accountLabel: transaction.accountLabel || null,
+        categoryId: transaction.categoryId,
+        categoryCode: metadata.categoryCode || categoryData.code || null,
+        categoryName: metadata.categoryName || categoryData.name || null,
+        status,
+        requiresSpecialHandling: isSpecial,
+        _transactionType: transactionType  // Special property to categorize the transaction
+      };
+    });
     
-    console.log(`Returning ${mappedTransactions.length} ${type} transactions`);
+    // Group transactions by their type
+    const regularTransactions = allTransactions.filter(t => t._transactionType === 'regular');
+    const specialTransactions = allTransactions.filter(t => t._transactionType === 'special');
+    const missingTransactions = allTransactions.filter(t => t._transactionType === 'missing');
+    
+    // If a specific type was requested, return only that type
+    let responseTransactions;
+    if (type === 'special') {
+      responseTransactions = specialTransactions;
+    } else if (type === 'missing') {
+      responseTransactions = missingTransactions;
+    } else if (type === 'regular') {
+      responseTransactions = regularTransactions;
+    } else {
+      // If no type specified, return everything in separate arrays
+      // This way the frontend doesn't have to categorize anything
+      return NextResponse.json({
+        allTransactions,
+        regularTransactions,
+        specialTransactions,
+        missingTransactions,
+        counts: {
+          all: allTransactions.length,
+          regular: regularTransactions.length,
+          special: specialTransactions.length,
+          missing: missingTransactions.length
+        }
+      });
+    }
+    
+    console.log(`Transactions by type: ${regularTransactions.length} regular, ${specialTransactions.length} special, ${missingTransactions.length} missing`);
+    console.log(`Returning ${responseTransactions.length} ${type || 'all'} transactions`);
     
     return NextResponse.json({
-      transactions: mappedTransactions,
-      count: mappedTransactions.length
+      transactions: responseTransactions,
+      count: responseTransactions.length,
+      counts: {
+        all: allTransactions.length,
+        regular: regularTransactions.length,
+        special: specialTransactions.length,
+        missing: missingTransactions.length
+      }
     });
   } catch (error) {
     console.error('Error fetching transactions:', error);
@@ -104,6 +156,12 @@ export async function POST(request: Request) {
     const projectCode = data.projectCode?.toString()
     const internalCode = data.internalCode?.toString().padStart(4, '0')
     
+    // Check for special transaction types
+    const normalizedInternalCode = data.internalCode?.toString().replace(/^0+/, '') || '';
+    const isSpecialTransaction = 
+      data.transactionType === 'IVMC-Hochr.' || 
+      normalizedInternalCode === '23152';
+    
     // Only try to find a category if we explicitly have a categoryCode that's not a raw numeric code
     let categoryId = null
     let category = null
@@ -116,6 +174,16 @@ export async function POST(request: Request) {
       
       if (category) {
         categoryId = category.id
+        
+        // Check if this is a parent category
+        const hasChildren = await prisma.category.findFirst({
+          where: { parentId: category.id }
+        });
+        
+        // If it's a parent category, it should be marked as missing
+        if (hasChildren) {
+          data.status = 'missing';
+        }
       } else if (data.categoryCode) {
         logger.error(`Category not found: ${data.categoryCode}`)
         return NextResponse.json(
@@ -151,6 +219,28 @@ export async function POST(request: Request) {
     const splitIndex = data.splitIndex || 0
     const originalAmount = data.originalAmount || amount
     
+    // Determine initial status based on transaction type and category
+    let initialStatus = data.status || 'unprocessed';
+    
+    if (isSpecialTransaction) {
+      // Special transaction types should always be marked as special
+      initialStatus = 'special';
+    } else if (categoryId) {
+      // Check if this is a parent category (needs missing status)
+      const hasChildren = await prisma.category.findFirst({
+        where: { parentId: categoryId }
+      });
+      
+      if (hasChildren) {
+        initialStatus = 'missing';
+      } else {
+        initialStatus = 'processed';
+      }
+    } else {
+      // No category means it needs processing
+      initialStatus = 'missing';
+    }
+    
     // Create transaction - now categoryId can be null
     const transaction = await prisma.transaction.create({
       data: {
@@ -171,9 +261,10 @@ export async function POST(request: Request) {
         paymentPartner: data.paymentPartner?.toString() || null,
         internalAccount: data.internalAccount?.toString() || null,
         accountLabel: data.accountLabel?.toString() || null,
-        processed: false,
-        status: data.status || 'unprocessed',
+        processed: initialStatus === 'processed',
+        status: initialStatus,
         categoryId, // This can now be null
+        requiresSpecialHandling: isSpecialTransaction,
         // Add split transaction fields
         isSplit,
         totalSplits,
@@ -202,7 +293,8 @@ export async function POST(request: Request) {
         categoryCode: displayCategoryCode,
         bookingDate: transaction.bookingDate.toISOString(),
         invoiceDate: transaction.invoiceDate?.toISOString() || null,
-        amount: Number(transaction.amount.toFixed(2))
+        amount: Number(transaction.amount.toFixed(2)),
+        requiresSpecialHandling: isSpecialTransaction
       }
     })
   } catch (error) {

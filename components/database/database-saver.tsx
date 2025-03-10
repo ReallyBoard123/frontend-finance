@@ -11,50 +11,23 @@ interface DatabaseSaverProps {
   selectedNewTransactions?: Transaction[]; // New prop for selected transactions
 }
 
-interface YearlyTotalCategory {
-  spent: number;
-  budget: number;
-  remaining: number;
-  transactions: Transaction[];
-}
-
-function validateTransaction(transaction: Transaction): { isValid: boolean; missingFields: string[]; fixableFields: string[] } {
-  const requiredFields = [
-    'projectCode',
-    'year',
-    'amount',
-    'internalCode',
-    'description',
-    'transactionType',
-    'bookingDate'
-  ];
-
-  const fixableFields = ['costGroup'];
-
-  const missingFields = requiredFields.filter(field => {
-    const value = transaction[field as keyof Transaction];
-    return value === undefined || value === null || value === '';
-  });
-
-  const missingFixableFields = fixableFields.filter(field => {
-    const value = transaction[field as keyof Transaction];
-    return value === undefined || value === null || value === '';
-  });
-
-  return {
-    isValid: missingFields.length === 0,
-    missingFields,
-    fixableFields: missingFixableFields
-  };
-}
-
-function prepareTransactionData(transaction: Transaction, index: number = 0) {
+function prepareTransactionData(transaction: Transaction, index: number = 0, categories: any[] = []) {
   // Normalize internal code
   const normalizedInternalCode = transaction.internalCode.replace(/^0+/, '');
   
   // Check if it's a special category
-  const is600 = normalizedInternalCode === '600';
-  const is23152 = normalizedInternalCode === '23152';
+  const isSpecial = 
+    transaction.transactionType === 'IVMC-Hochr.' || 
+    normalizedInternalCode === '23152';
+  
+  // Check if it's a parent category
+  let isParentCategory = false;
+  if (transaction.categoryId && categories.length > 0) {
+    isParentCategory = categories.some(c => 
+      c.id === transaction.categoryId && 
+      categories.some(child => child.parentId === c.id)
+    );
+  }
   
   // Generate a safe document number that won't have undefined
   const docNumber = transaction.documentNumber || `NODOC-${Date.now()}-${index}`;
@@ -64,6 +37,18 @@ function prepareTransactionData(transaction: Transaction, index: number = 0) {
     ? transaction.id 
     : `${transaction.projectCode}-${transaction.year}-${docNumber}-${index}`;
     
+  // Determine status based on transaction type
+  let status = transaction.status || 'unprocessed';
+  if (isSpecial) {
+    status = 'special';
+  } else if (isParentCategory) {
+    status = 'missing';
+  } else if (transaction.categoryId && !isParentCategory) {
+    status = 'processed';
+  } else {
+    status = 'missing';
+  }
+  
   return {
     ...transaction,
     id: safeId,
@@ -74,8 +59,8 @@ function prepareTransactionData(transaction: Transaction, index: number = 0) {
     invoiceDate: transaction.invoiceDate ? new Date(transaction.invoiceDate).toISOString() : null,
     year: Number(transaction.year),
     amount: Number(transaction.amount),
-    requiresSpecialHandling: is23152,
-    status: transaction.status || 'unprocessed',
+    requiresSpecialHandling: isSpecial,
+    status,
     costGroup: transaction.costGroup || 'Unspecified',
     projectCode: transaction.projectCode.toString(),
     documentNumber: docNumber,
@@ -85,9 +70,9 @@ function prepareTransactionData(transaction: Transaction, index: number = 0) {
     paymentPartner: transaction.paymentPartner || null,
     internalAccount: transaction.internalAccount || null,
     accountLabel: transaction.accountLabel || null,
-    categoryId: (is600 || is23152) ? null : transaction.categoryId,
+    categoryId: transaction.categoryId, // Can be null
     metadata: {
-      needsReview: is600,
+      needsReview: normalizedInternalCode === '600',
       originalInternalCode: transaction.internalCode,
       categoryCode: transaction.categoryCode
     }
@@ -110,6 +95,9 @@ export function DatabaseSaver({
     let successCount = 0;
     let errorCount = 0;
     let skippedCount = 0;
+    let specialCount = 0;
+    let missingCount = 0;
+    let processedCount = 0;
 
     try {
       // Use only the selected new transactions if provided, otherwise use processedData
@@ -120,9 +108,9 @@ export function DatabaseSaver({
       console.log(`Attempting to save ${transactionsToSave.length} transactions to database`);
 
       // Process each transaction
-      for (const transaction of transactionsToSave) {
+      for (const [index, transaction] of transactionsToSave.entries()) {
         try {
-          const preparedData = prepareTransactionData(transaction);
+          const preparedData = prepareTransactionData(transaction, index, categories);
           
           // Check if transaction already exists
           const checkResponse = await fetch(`/api/transactions/check/${preparedData.id}`);
@@ -144,6 +132,15 @@ export function DatabaseSaver({
           if (!response.ok) {
             throw new Error(await response.text());
           }
+          
+          // Track types of transactions saved
+          if (preparedData.status === 'special') {
+            specialCount++;
+          } else if (preparedData.status === 'missing') {
+            missingCount++;
+          } else if (preparedData.status === 'processed') {
+            processedCount++;
+          }
 
           successCount++;
         } catch (error) {
@@ -155,7 +152,8 @@ export function DatabaseSaver({
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      onSaveComplete(`Successfully saved ${successCount} new transactions, skipped ${skippedCount}, failed ${errorCount}`);
+      const statusSummary = `Saved ${successCount} transactions (${processedCount} processed, ${missingCount} missing, ${specialCount} special). Skipped ${skippedCount}. Failed ${errorCount}.`;
+      onSaveComplete(statusSummary);
     } catch (error) {
       onSaveComplete(`Save process failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {

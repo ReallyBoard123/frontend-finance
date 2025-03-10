@@ -14,6 +14,17 @@ export function useMissingEntriesOperations(transactions: Transaction[], categor
     }
   };
 
+  // Create a set of parent category IDs for quick lookup
+  const parentCategoryIds = useMemo(() => {
+    const parentIds = new Set<string>();
+    categories.forEach(category => {
+      if (categories.some(c => c.parentId === category.id)) {
+        parentIds.add(category.id);
+      }
+    });
+    return parentIds;
+  }, [categories]);
+
   const isProperlyMapped = (transaction: Transaction): boolean => {
     // Normalize internal code
     const normalizedInternalCode = transaction.internalCode?.replace(/^0+/, '') || '';
@@ -38,9 +49,20 @@ export function useMissingEntriesOperations(transactions: Transaction[], categor
       return false;
     }
     
-    // If it doesn't have a categoryId or categoryCode, it's not properly mapped
+    // If it has 'processed' or 'completed' status, it's properly mapped
+    if (transaction.status === 'processed' || transaction.status === 'completed') {
+      return true;
+    }
+    
+    // If it doesn't have a categoryId, it's not properly mapped
     if (!transaction.categoryId) return false;
     
+    // Check if the category is a parent category
+    if (transaction.categoryId && parentCategoryIds.has(transaction.categoryId)) {
+      return false; // Parent categories need to be mapped to child categories
+    }
+    
+    // If the category code doesn't start with F, it's not properly mapped
     if (!transaction.categoryCode || !transaction.categoryCode.startsWith('F')) {
       return false;
     }
@@ -50,13 +72,25 @@ export function useMissingEntriesOperations(transactions: Transaction[], categor
   };
 
   const missingEntries = useMemo(() => {
-    return transactions.filter(transaction => !isProperlyMapped(transaction));
-  }, [transactions, categories]);
+    const missing = transactions.filter(transaction => !isProperlyMapped(transaction));
+    console.log(`Found ${missing.length} transactions missing proper category mapping`);
+    
+    // Log missing parent category transactions for debugging
+    const missingParentCategoryTransactions = missing.filter(t => 
+      t.categoryId && parentCategoryIds.has(t.categoryId)
+    );
+    if (missingParentCategoryTransactions.length > 0) {
+      console.log(`${missingParentCategoryTransactions.length} transactions have parent categories that need child assignment`);
+    }
+    
+    return missing;
+  }, [transactions, categories, parentCategoryIds, isProperlyMapped]);
 
   return {
     expandedRow,
     toggleRowExpand,
     isProperlyMapped,
-    missingEntries
+    missingEntries,
+    parentCategoryIds
   };
 }

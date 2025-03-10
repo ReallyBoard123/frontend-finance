@@ -1,3 +1,4 @@
+// app/dashboard/transactions/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -18,10 +19,12 @@ export default function TransactionsPage() {
     const loadData = async () => {
       setIsLoading(true);
       try {
-        // Direct API calls to avoid hooks that might cause infinite loops
+        // Use the simplified API that returns all transaction types at once
         const response = await fetch('/api/transactions');
         const data = await response.json();
-        setTransactions(data.transactions || []);
+        
+        // Use allTransactions to get everything
+        setTransactions(data.allTransactions || []);
       } catch (error) {
         console.error('Error loading transaction data:', error);
         toast.error('Failed to load transactions');
@@ -38,7 +41,7 @@ export default function TransactionsPage() {
     try {
       const response = await fetch('/api/transactions');
       const data = await response.json();
-      setTransactions(data.transactions || []);
+      setTransactions(data.allTransactions || []);
       toast.success('Transactions refreshed');
     } catch (error) {
       console.error('Error refreshing data:', error);

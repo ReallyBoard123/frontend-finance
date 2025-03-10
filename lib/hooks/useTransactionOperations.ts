@@ -1,4 +1,4 @@
-// lib/hooks/useTransactionOperations.ts
+// lib/hooks/useTransactionOperations.ts (updated version)
 import { useState } from 'react';
 import { useFinanceStore } from '@/lib/store';
 import type { Transaction, TransactionUpdate, YearlyTotals } from '@/types/transactions';
@@ -12,11 +12,22 @@ export function useTransactionOperations() {
   const fetchTransactions = async (type = 'regular') => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/transactions${type !== 'regular' ? `?type=${type}` : ''}`);
+      // Add updateStatus=true to automatically update transaction statuses on the server
+      const response = await fetch(`/api/transactions${type !== 'regular' ? `?type=${type}` : ''}&updateStatus=true`);
       if (!response.ok) throw new Error('Failed to fetch transactions');
       
       const data = await response.json();
       const transactions = data.transactions || [];
+      
+      // Log status counts if available
+      if (data.statusCounts) {
+        console.log('Transaction status breakdown:', data.statusCounts);
+      }
+      
+      // Log category usage if available
+      if (data.categoryCounts) {
+        console.log('Transactions by category:', data.categoryCounts);
+      }
       
       // Update the store with fetched data
       if (categories.length > 0) {
@@ -28,6 +39,16 @@ export function useTransactionOperations() {
         const matchedTransactions = matchTransactionsToCategories(transactions, categories);
         
         const yearlyTotals = calculateYearlyTotals(matchedTransactions, categories);
+        
+        // Log how many transactions are used in yearly calculations
+        const usedTransactions = new Set<string>();
+        Object.values(yearlyTotals).forEach(yearData => {
+          Object.values(yearData).forEach(categoryData => {
+            categoryData.transactions.forEach(t => usedTransactions.add(t.id));
+          });
+        });
+        
+        console.log(`Using ${usedTransactions.size} transactions in budget calculations`);
         
         const processedData = {
           transactions: matchedTransactions,
@@ -135,6 +156,13 @@ export function useTransactionOperations() {
     return transactions.map(transaction => {
       // If transaction already has a categoryCode and categoryId, keep it
       if (transaction.categoryCode && transaction.categoryId) {
+        // If it's being used for a category, ensure it's marked as processed
+        if (transaction.status !== 'processed' && 
+            transaction.status !== 'completed' && 
+            transaction.status !== 'pending_inquiry' &&
+            transaction.status !== 'special') {
+          transaction.status = 'processed';
+        }
         return transaction;
       }
       
@@ -145,7 +173,8 @@ export function useTransactionOperations() {
           return {
             ...transaction,
             categoryId: category.id,
-            categoryName: category.name
+            categoryName: category.name,
+            status: 'processed' // Mark as processed
           };
         }
       }
@@ -159,7 +188,18 @@ export function useTransactionOperations() {
           ...transaction,
           categoryId: category.id,
           categoryCode: category.code,
-          categoryName: category.name
+          categoryName: category.name,
+          status: 'processed' // Mark as processed
+        };
+      }
+      
+      // Mark as missing if still no category assigned (unless it's special or pending inquiry)
+      if (!transaction.categoryId && 
+          !transaction.requiresSpecialHandling && 
+          transaction.status !== 'pending_inquiry') {
+        return {
+          ...transaction,
+          status: 'missing'
         };
       }
       
@@ -178,7 +218,10 @@ export function useTransactionOperations() {
     
     const years = [...new Set(transactions.map(t => t.year.toString()))];
     
+    // Track how many transactions are used in each year
+    const transactionsUsedByYear: Record<string, Set<string>> = {};
     years.forEach(year => {
+      transactionsUsedByYear[year] = new Set();
       yearlyTotals[year] = {};
       categories.forEach(category => {
         yearlyTotals[year][category.code] = {
@@ -197,6 +240,7 @@ export function useTransactionOperations() {
       if (!categoryCode || !yearlyTotals[year]) return;
       
       if (yearlyTotals[year][categoryCode]) {
+        transactionsUsedByYear[year].add(transaction.id);
         yearlyTotals[year][categoryCode].spent += transaction.amount;
         yearlyTotals[year][categoryCode].remaining = 
           yearlyTotals[year][categoryCode].budget - yearlyTotals[year][categoryCode].spent;
@@ -209,12 +253,25 @@ export function useTransactionOperations() {
       // Also update parent category totals
       const parentCategory = categories.find(c => c.id === category.parentId);
       if (parentCategory && yearlyTotals[year][parentCategory.code]) {
+        transactionsUsedByYear[year].add(transaction.id);
         yearlyTotals[year][parentCategory.code].spent += transaction.amount;
         yearlyTotals[year][parentCategory.code].remaining = 
           yearlyTotals[year][parentCategory.code].budget - yearlyTotals[year][parentCategory.code].spent;
       }
     });
   
+    // Log transaction usage by year
+    years.forEach(year => {
+      console.log(`Year ${year} uses ${transactionsUsedByYear[year].size} transactions`);
+    });
+    
+    // Log overall transaction usage
+    const allUsedTransactions = new Set<string>();
+    Object.values(transactionsUsedByYear).forEach(yearSet => {
+      yearSet.forEach(id => allUsedTransactions.add(id));
+    });
+    console.log(`Total unique transactions used: ${allUsedTransactions.size}`);
+    
     return yearlyTotals;
   };
 

@@ -1,3 +1,4 @@
+// components/costs/costs-upload.tsx - Updated to fix special transactions
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -7,8 +8,7 @@ import { AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { UploadControls } from './upload-controls';
 import { NewTransactionsConfirmation } from './new-transactions-confirmation';
-
-import type { ProcessedData, Transaction, TransactionUpdate } from '@/types/transactions';
+import type { ProcessedData, Transaction, TransactionUpdate, TransactionStatus } from '@/types/transactions';
 import { CostsTabs } from './costs-tabs';
 import { Category } from '@/types/budget';
 
@@ -61,6 +61,7 @@ export function CostsUpload() {
       if (initialFetchDone) return;
     
       try {
+        // Fetch all transaction types separately to ensure we get everything
         const [regularRes, specialRes, inquiriesRes] = await Promise.all([
           fetch('/api/transactions?type=regular'),
           fetch('/api/transactions?type=special'),
@@ -74,11 +75,12 @@ export function CostsUpload() {
         ]);
     
         // Store the current timestamp as last DB check
-        const now = Date.now();
         setInquiries(inquiries);
     
         const regularTransactions = regular.transactions || [];
         const specialTransactions = special.transactions || [];
+        
+        console.log(`Loaded ${regularTransactions.length} regular and ${specialTransactions.length} special transactions`);
     
         // If the database has no transactions, make sure to clear the store
         if (regularTransactions.length === 0 && specialTransactions.length === 0) {
@@ -112,7 +114,7 @@ export function CostsUpload() {
     };
 
     fetchTransactions();
-  }, [categories, setCosts, setInquiries, calculateYearlyTotals, initialFetchDone]);
+  }, [categories, setCosts, setInquiries, calculateYearlyTotals, initialFetchDone, costs]);
 
   const identifyNewTransactions = async (uploadedTransactions: Transaction[]) => {
     try {
@@ -193,23 +195,29 @@ export function CostsUpload() {
     // Store only the selected new transactions for saving to database later
     setSelectedNewTransactions(selectedTransactions);
     
+    // Split transactions into regular and special
+    const regularTransactions = selectedTransactions.filter(t => !t.requiresSpecialHandling);
+    const specialTxs = selectedTransactions.filter(t => t.requiresSpecialHandling);
+    
+    console.log(`Processing ${regularTransactions.length} regular and ${specialTxs.length} special transactions`);
+    
     // Create a data object that includes BOTH existing transactions AND the new ones
     const updatedData: ProcessedData = {
       // For regular transactions, merge existing with new non-special ones
       transactions: [
         ...(costs?.transactions || []),
-        ...selectedTransactions.filter(t => !t.requiresSpecialHandling)
+        ...regularTransactions
       ],
       // For special transactions, merge existing with new special ones
       specialTransactions: [
         ...(costs?.specialTransactions || []),
-        ...selectedTransactions.filter(t => t.requiresSpecialHandling)
+        ...specialTxs
       ],
       // Calculate totals based on all transactions
       yearlyTotals: {} // We'll calculate this below
     };
     
-    // Calculate yearly totals with all transactions
+    // Calculate yearly totals with all transactions (excluding special ones)
     updatedData.yearlyTotals = calculateYearlyTotals(updatedData.transactions, categories);
     
     // Update state
@@ -219,7 +227,7 @@ export function CostsUpload() {
     setShowConfirmation(false);
     
     setUploadStatus(
-      `Added ${selectedTransactions.length} new transactions. Click "Verify Data" then "Save to Database".`
+      `Added ${selectedTransactions.length} new transactions (${regularTransactions.length} regular, ${specialTxs.length} special). Click "Verify Data" then "Save to Database".`
     );
   };
 
@@ -321,9 +329,13 @@ export function CostsUpload() {
 }
 
 function processTransactions(rows: TransactionRow[], categories: Category[]): ProcessedData {
-  const transactions = rows
+  // Group transactions by type
+  const transactions: Transaction[] = [];
+  const specialTransactions: Transaction[] = [];
+  
+  rows
     .filter((row) => row['Jahr'] && row['Betrag'])
-    .map((row, index) => {
+    .forEach((row, index) => {
       const internalCode = row['Konto (KoArt)']?.toString() || '';
       const transactionType = row['Buchungsart (Art)'];
       const normalizedInternalCode = internalCode.replace(/^0+/, ''); // Remove leading zeros
@@ -372,6 +384,16 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
                                   bookingDate : 
                                   new Date(bookingDate);
 
+      // Set transaction status based on type
+      let status: TransactionStatus = 'unprocessed';
+      if (requiresSpecialHandling) {
+        status = 'special';
+      } else if (is600 || (matchingCategory && parentCategory)) {
+        status = 'missing';
+      } else if (matchingCategory && !parentCategory) {
+        status = 'processed';
+      }
+
       const transaction: Transaction = {
         id: uniqueId,
         projectCode: row['Projekt (KTR)']?.toString() || '',
@@ -396,24 +418,26 @@ function processTransactions(rows: TransactionRow[], categories: Category[]): Pr
         requiresSpecialHandling,
         categoryParentCode: parentCategory?.code,
         categoryParentId: parentCategory?.id,
-        status: is600 ? 'unprocessed' : 'unprocessed',
+        status,
         metadata: {
           needsReview: is600,
-          originalInternalCode: internalCode
+          originalInternalCode: internalCode,
+          categoryCode: matchingCategory?.code
         }
       };
 
-      return transaction;
+      // Add to appropriate array based on type
+      if (requiresSpecialHandling) {
+        specialTransactions.push(transaction);
+      } else {
+        transactions.push(transaction);
+      }
     });
 
-  // Filter special transactions 
-  const specialTransactions = transactions.filter(t => t.requiresSpecialHandling);
-  const regularTransactions = transactions.filter(t => !t.requiresSpecialHandling);
-  
-  const yearlyTotals = processTransactionTotals(regularTransactions, categories);
+  const yearlyTotals = processTransactionTotals(transactions, categories);
 
   return { 
-    transactions: regularTransactions, 
+    transactions, 
     yearlyTotals, 
     specialTransactions 
   };

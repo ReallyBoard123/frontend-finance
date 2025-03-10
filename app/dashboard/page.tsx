@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx
+// app/dashboard/page.tsx (fixed to load cost data properly)
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -34,12 +34,6 @@ export default function DashboardPage() {
     if (initialLoadComplete.current) return;
     
     const loadInitialData = async () => {
-      // If we already have both categories and transaction data, don't reload
-      if (categories.length > 0 && (costs?.transactions?.length ?? 0) > 0) {
-        initialLoadComplete.current = true;
-        return;
-      }
-      
       setIsLoading(true);
       try {
         // Fetch categories first if not already loaded
@@ -54,22 +48,29 @@ export default function DashboardPage() {
         if (!costs?.transactions || costs.transactions.length === 0) {
           const response = await fetch('/api/transactions');
           const data = await response.json();
-          const transactions = data.transactions || [];
           
-          // Update recent transactions
-          if (transactions.length > 0) {
-            const sorted = [...transactions].sort(
+          // Use regularTransactions for budget calculations (not special transactions)
+          const regularTransactions = data.regularTransactions || [];
+          const specialTransactions = data.specialTransactions || [];
+          
+          console.log(`Loaded ${regularTransactions.length} regular transactions for budget calculations`);
+          
+          if (regularTransactions.length > 0) {
+            // Calculate yearly totals with regular transactions
+            const yearlyTotals = calculateYearlyTotals(regularTransactions, currentCategories);
+            
+            // Update costs in store
+            setCosts({
+              transactions: regularTransactions,
+              specialTransactions: specialTransactions,
+              yearlyTotals: yearlyTotals
+            });
+            
+            // Update recent transactions display
+            const sorted = [...regularTransactions].sort(
               (a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime()
             );
             setRecentTransactions(sorted.slice(0, 5));
-            
-            // Calculate yearly totals and update costs
-            const yearlyTotals = calculateYearlyTotals(transactions, currentCategories);
-            setCosts({
-              transactions,
-              specialTransactions: [], // We'll handle these separately if needed
-              yearlyTotals
-            });
           }
         }
         
@@ -83,7 +84,7 @@ export default function DashboardPage() {
     };
     
     loadInitialData();
-  }, []);  // Empty dependency array ensures this runs once
+  }, [categories, setCosts, fetchCategories, calculateYearlyTotals, costs]);
   
   const handleRefresh = async () => {
     setIsLoading(true);
@@ -95,17 +96,24 @@ export default function DashboardPage() {
       // Reload transactions and recalculate
       const response = await fetch('/api/transactions');
       const data = await response.json();
-      const transactions = data.transactions || [];
       
-      if (transactions.length > 0) {
-        const yearlyTotals = calculateYearlyTotals(transactions, currentCategories);
+      // Use regularTransactions for budget calculations
+      const regularTransactions = data.regularTransactions || [];
+      const specialTransactions = data.specialTransactions || [];
+      
+      if (regularTransactions.length > 0) {
+        // Calculate yearly totals
+        const yearlyTotals = calculateYearlyTotals(regularTransactions, currentCategories);
+        
+        // Update store
         setCosts({
-          transactions,
-          specialTransactions: [], 
+          transactions: regularTransactions,
+          specialTransactions,
           yearlyTotals
         });
         
-        const sorted = [...transactions].sort(
+        // Update recent transactions
+        const sorted = [...regularTransactions].sort(
           (a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime()
         );
         setRecentTransactions(sorted.slice(0, 5));
@@ -167,8 +175,8 @@ export default function DashboardPage() {
       onExport={handleExport}
       isRefreshing={isLoading}
     >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-3">
+      <div className="grid grid-cols-1 gap-6">
+        <div>
           <BudgetSummary 
             categories={categories}
             yearlyTotals={costs?.yearlyTotals || {}}
